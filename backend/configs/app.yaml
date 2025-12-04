@@ -1,0 +1,36 @@
+server:
+  port: 8100
+  mode: debug
+
+database:
+  driver: mysql
+  host: 127.0.0.1
+  port: 3306
+  username: root
+  password: password
+  database: dataease
+  charset: utf8mb4
+  parse_time: true
+  loc: Local
+
+calcite:
+  avatica_url: "http://localhost:8765/"
+  max_open_conns: 100
+  max_idle_conns: 20
+  conn_max_lifetime: 1h
+
+redis:
+  host: 127.0.0.1
+  port: 6379
+  password: ""
+  db: 0
+
+logger:
+  level: debug
+  filename: logs/app.log
+  max_size: 100
+  max_age: 30
+  max_backups: 7
+
+jwt:
+  secret: "your-256-bit-secret-key-change-this-in-production-env"
