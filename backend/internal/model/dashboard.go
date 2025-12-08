@@ -10,6 +10,7 @@ type Dashboard struct {
 	CanvasStyleData string `gorm:"type:longtext" json:"canvasStyleData"`      // 画布样式 JSON
 	ComponentData   string `gorm:"type:longtext" json:"componentData"`        // 组件数据 JSON
 	Status          int    `gorm:"default:0" json:"status"`                   // 0=未发布 1=已发布
+	PublishTime     int64  `gorm:"default:0" json:"publishTime"`              // 发布时间
 	Sort            int    `gorm:"default:0" json:"sort"`                     // 排序
 	CreateTime      int64  `gorm:"autoCreateTime:milli" json:"createTime"`
 	UpdateTime      int64  `gorm:"autoUpdateTime:milli" json:"updateTime"`

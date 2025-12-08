@@ -70,12 +70,7 @@ func (h *DashboardHandler) Get(c *gin.Context) {
 }
 
 func (h *DashboardHandler) List(c *gin.Context) {
-	pid := c.Query("pid")
-	if pid == "" {
-		pid = "0"
-	}
-
-	list, err := h.svc.List(c.Request.Context(), pid)
+	list, err := h.svc.List(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -87,9 +82,8 @@ func (h *DashboardHandler) List(c *gin.Context) {
 // Publish 发布仪表板
 func (h *DashboardHandler) Publish(c *gin.Context) {
 	id := c.Param("id")
-	userId := c.GetString("userId") // 从JWT获取用户ID
 
-	if err := h.svc.Publish(c.Request.Context(), id, userId); err != nil {
+	if err := h.svc.Publish(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -109,15 +103,15 @@ func (h *DashboardHandler) Unpublish(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "下线成功"})
 }
 
-// GetStatus 获取发布状态
-func (h *DashboardHandler) GetStatus(c *gin.Context) {
+// View 查看已发布的仪表板（公开访问）
+func (h *DashboardHandler) View(c *gin.Context) {
 	id := c.Param("id")
 
-	status, err := h.svc.GetPublishStatus(c.Request.Context(), id)
+	dashboard, err := h.svc.GetPublished(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusNotFound, gin.H{"error": "仪表板不存在或未发布"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": status})
+	c.JSON(http.StatusOK, dashboard)
 }

@@ -17,12 +17,12 @@ type DashboardService interface {
 	Update(ctx context.Context, dashboard *model.Dashboard) error
 	Delete(ctx context.Context, id string) error
 	Get(ctx context.Context, id string) (*model.Dashboard, error)
-	List(ctx context.Context, pid string) ([]*model.Dashboard, error)
+	List(ctx context.Context) ([]*model.Dashboard, error)
 
-	// 发布管理
-	Publish(ctx context.Context, id string, userId string) error
+	// 发布相关
+	Publish(ctx context.Context, id string) error
 	Unpublish(ctx context.Context, id string) error
-	GetPublishStatus(ctx context.Context, id string) (int, error)
+	GetPublished(ctx context.Context, id string) (*model.Dashboard, error)
 }
 
 type dashboardService struct {
@@ -159,37 +159,28 @@ func (s *dashboardService) Get(ctx context.Context, id string) (*model.Dashboard
 }
 
 // List 获取仪表板列表
-func (s *dashboardService) List(ctx context.Context, pid string) ([]*model.Dashboard, error) {
-	logger.Log.Info("listing dashboards", zap.String("pid", pid))
+func (s *dashboardService) List(ctx context.Context) ([]*model.Dashboard, error) {
+	logger.Log.Info("listing dashboards")
 
-	list, err := s.repo.List(ctx, pid)
+	list, err := s.repo.List(ctx, "")
 	if err != nil {
-		logger.Log.Error("failed to list dashboards",
-			zap.Error(err),
-			zap.String("pid", pid),
-		)
+		logger.Log.Error("failed to list dashboards", zap.Error(err))
 		return nil, fmt.Errorf("failed to list dashboards: %w", err)
 	}
 
-	logger.Log.Info("dashboards listed successfully",
-		zap.String("pid", pid),
-		zap.Int("count", len(list)),
-	)
+	logger.Log.Info("dashboards listed successfully", zap.Int("count", len(list)))
 	return list, nil
 }
 
 // Publish 发布仪表板
-func (s *dashboardService) Publish(ctx context.Context, id string, userId string) error {
+func (s *dashboardService) Publish(ctx context.Context, id string) error {
 	dashboard, err := s.repo.Get(ctx, id)
 	if err != nil {
-		return err
+		return fmt.Errorf("dashboard not found: %w", err)
 	}
 
-	dashboard.Status = 1 // 1=已发布
-	dashboard.UpdateTime = time.Now().UnixMilli()
-	if userId != "" {
-		dashboard.CreateBy = userId // 记录发布人
-	}
+	dashboard.Status = 1
+	dashboard.PublishTime = time.Now().UnixMilli()
 
 	return s.repo.Update(ctx, dashboard)
 }
@@ -198,20 +189,25 @@ func (s *dashboardService) Publish(ctx context.Context, id string, userId string
 func (s *dashboardService) Unpublish(ctx context.Context, id string) error {
 	dashboard, err := s.repo.Get(ctx, id)
 	if err != nil {
-		return err
+		return fmt.Errorf("dashboard not found: %w", err)
 	}
 
-	dashboard.Status = 0 // 0=未发布
-	dashboard.UpdateTime = time.Now().UnixMilli()
+	dashboard.Status = 0
+	dashboard.PublishTime = 0
 
 	return s.repo.Update(ctx, dashboard)
 }
 
-// GetPublishStatus 获取发布状态
-func (s *dashboardService) GetPublishStatus(ctx context.Context, id string) (int, error) {
+// GetPublished 获取已发布的仪表板（公开访问）
+func (s *dashboardService) GetPublished(ctx context.Context, id string) (*model.Dashboard, error) {
 	dashboard, err := s.repo.Get(ctx, id)
 	if err != nil {
-		return 0, err
+		return nil, fmt.Errorf("dashboard not found: %w", err)
 	}
-	return dashboard.Status, nil
+
+	if dashboard.Status != 1 {
+		return nil, fmt.Errorf("dashboard not published")
+	}
+
+	return dashboard, nil
 }

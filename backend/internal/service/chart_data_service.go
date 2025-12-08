@@ -8,54 +8,78 @@ import (
 	"cozy-insight-backend/pkg/logger"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"go.uber.org/zap"
 )
 
 type ChartDataService interface {
-	GetChartData(ctx context.Context, chartId string) ([]map[string]interface{}, error)
+	GetChartData(ctx context.Context, chartID string) ([]map[string]interface{}, error)
+	GetChartDataWithFilter(ctx context.Context, chartID string, filter *QueryFilter) ([]map[string]interface{}, error)
 }
 
 type chartDataService struct {
 	chartRepo   repository.ChartRepository
 	datasetRepo repository.DatasetRepository
+	calcite     *engine.CalciteClient
 }
 
-func NewChartDataService(chartRepo repository.ChartRepository, datasetRepo repository.DatasetRepository) ChartDataService {
+// QueryFilter 查询过滤器
+type QueryFilter struct {
+	Filters []FilterCondition `json:"filters"`
+	Limit   int               `json:"limit"`
+	Offset  int               `json:"offset"`
+}
+
+// FilterCondition 过滤条件
+type FilterCondition struct {
+	Field    string      `json:"field"`
+	Operator string      `json:"operator"` // =, !=, >, <, >=, <=, LIKE, IN
+	Value    interface{} `json:"value"`
+}
+
+// AxisConfig 轴配置
+type AxisConfig struct {
+	Fields []FieldConfig `json:"fields"`
+}
+
+// FieldConfig 字段配置
+type FieldConfig struct {
+	Name      string `json:"name"`
+	Aggregate string `json:"aggregate"` // SUM, AVG, COUNT, MAX, MIN
+	Sort      string `json:"sort"`      // ASC, DESC
+	DataType  string `json:"dataType"`
+}
+
+func NewChartDataService(chartRepo repository.ChartRepository, datasetRepo repository.DatasetRepository, calcite *engine.CalciteClient) ChartDataService {
 	return &chartDataService{
 		chartRepo:   chartRepo,
 		datasetRepo: datasetRepo,
+		calcite:     calcite,
 	}
 }
 
-// GetChartData 获取图表数据
-func (s *chartDataService) GetChartData(ctx context.Context, chartId string) ([]map[string]interface{}, error) {
-	// 1. 获取图表配置
-	chart, err := s.chartRepo.Get(ctx, chartId)
+func (s *chartDataService) GetChartData(ctx context.Context, chartID string) ([]map[string]interface{}, error) {
+	return s.GetChartDataWithFilter(ctx, chartID, nil)
+}
+
+func (s *chartDataService) GetChartDataWithFilter(ctx context.Context, chartID string, filter *QueryFilter) ([]map[string]interface{}, error) {
+	// 获取图表配置
+	chart, err := s.chartRepo.Get(ctx, chartID)
 	if err != nil {
-		logger.Log.Error("failed to get chart", zap.String("chartId", chartId), zap.Error(err))
-		return nil, fmt.Errorf("chart not found")
+		logger.Log.Error("failed to get chart", zap.String("chartId", chartID), zap.Error(err))
+		return nil, fmt.Errorf("chart not found: %w", err)
 	}
 
-	// 2. 获取关联的数据集表
-	if chart.TableID == "" {
-		return nil, fmt.Errorf("chart has no associated table")
-	}
-
+	// 获取数据集
 	table, err := s.datasetRepo.GetTable(ctx, chart.TableID)
 	if err != nil {
 		logger.Log.Error("failed to get table", zap.String("tableId", chart.TableID), zap.Error(err))
-		return nil, fmt.Errorf("table not found")
+		return nil, fmt.Errorf("dataset not found: %w", err)
 	}
 
-	// 3. 解析图表配置
-	xAxisConfig, yAxisConfig, err := s.parseChartConfig(chart)
-	if err != nil {
-		return nil, err
-	}
-
-	// 4. 构建 SQL
-	sql, err := s.buildSQL(table, xAxisConfig, yAxisConfig)
+	// 构建 SQL
+	sql, err := s.buildChartSQL(chart, table, filter)
 	if err != nil {
 		logger.Log.Error("failed to build SQL", zap.Error(err))
 		return nil, fmt.Errorf("failed to build SQL: %w", err)
@@ -63,7 +87,7 @@ func (s *chartDataService) GetChartData(ctx context.Context, chartId string) ([]
 
 	logger.Log.Info("executing chart query", zap.String("sql", sql))
 
-	// 5. 执行查询
+	// 执行查询
 	data, err := s.executeQuery(ctx, sql)
 	if err != nil {
 		logger.Log.Error("failed to execute query", zap.Error(err))
@@ -73,61 +97,93 @@ func (s *chartDataService) GetChartData(ctx context.Context, chartId string) ([]
 	return data, nil
 }
 
-// parseChartConfig 解析图表配置
-func (s *chartDataService) parseChartConfig(chart *model.ChartView) (xAxis, yAxis map[string]interface{}, err error) {
-	// 解析 xAxis
+// buildChartSQL 构建图表查询 SQL
+func (s *chartDataService) buildChartSQL(chart *model.ChartView, dataset *model.DatasetTable, filter *QueryFilter) (string, error) {
+	// 解析 X 轴和 Y 轴配置
+	var xAxisConfig, yAxisConfig AxisConfig
 	if chart.XAxis != "" {
-		if err := json.Unmarshal([]byte(chart.XAxis), &xAxis); err != nil {
-			return nil, nil, fmt.Errorf("failed to parse xAxis: %w", err)
+		if err := json.Unmarshal([]byte(chart.XAxis), &xAxisConfig); err != nil {
+			return "", fmt.Errorf("invalid xAxis config: %w", err)
 		}
 	}
-
-	// 解析 yAxis
 	if chart.YAxis != "" {
-		if err := json.Unmarshal([]byte(chart.YAxis), &yAxis); err != nil {
-			return nil, nil, fmt.Errorf("failed to parse yAxis: %w", err)
+		if err := json.Unmarshal([]byte(chart.YAxis), &yAxisConfig); err != nil {
+			return "", fmt.Errorf("invalid yAxis config: %w", err)
 		}
 	}
 
-	return xAxis, yAxis, nil
-}
-
-// buildSQL 构建 SQL 查询语句
-func (s *chartDataService) buildSQL(table *model.DatasetTable, xAxisConfig, yAxisConfig map[string]interface{}) (string, error) {
-	// 获取字段配置
-	xFields := s.extractFields(xAxisConfig)
-	yFields := s.extractFields(yAxisConfig)
-
-	if len(xFields) == 0 && len(yFields) == 0 {
-		return "", fmt.Errorf("no fields configured")
+	// 获取基础 SQL
+	var baseSQL string
+	if dataset.Type == "sql" {
+		var info map[string]interface{}
+		if err := json.Unmarshal([]byte(dataset.Info), &info); err != nil {
+			return "", fmt.Errorf("invalid dataset info: %w", err)
+		}
+		if v, ok := info["sql"].(string); ok {
+			baseSQL = v
+		}
+	} else if dataset.Type == "db" {
+		baseSQL = fmt.Sprintf("SELECT * FROM %s", dataset.PhysicalTableName)
 	}
 
 	// 构建 SELECT 子句
 	var selectFields []string
 	var groupByFields []string
 
-	// 添加维度字段 (xAxis)
-	for _, field := range xFields {
-		selectFields = append(selectFields, field)
-		groupByFields = append(groupByFields, field)
+	// X 轴字段（维度）
+	for _, field := range xAxisConfig.Fields {
+		selectFields = append(selectFields, field.Name)
+		groupByFields = append(groupByFields, field.Name)
 	}
 
-	// 添加指标字段 (yAxis) - 通常需要聚合
-	for _, field := range yFields {
-		// 默认使用 SUM 聚合
-		selectFields = append(selectFields, fmt.Sprintf("SUM(%s) as %s", field, field))
+	// Y 轴字段（指标，需要聚合）
+	for _, field := range yAxisConfig.Fields {
+		if field.Aggregate != "" {
+			selectFields = append(selectFields, fmt.Sprintf("%s(%s) AS %s",
+				field.Aggregate, field.Name, field.Name))
+		} else {
+			selectFields = append(selectFields, field.Name)
+		}
+	}
+
+	if len(selectFields) == 0 {
+		selectFields = append(selectFields, "*")
 	}
 
 	// 构建完整 SQL
-	sql := fmt.Sprintf("SELECT %s FROM %s", joinFields(selectFields), table.TableName)
+	sql := fmt.Sprintf("SELECT %s FROM (%s) AS base",
+		strings.Join(selectFields, ", "), baseSQL)
 
-	// 添加 GROUP BY (如果有维度字段)
-	if len(groupByFields) > 0 {
-		sql += fmt.Sprintf(" GROUP BY %s", joinFields(groupByFields))
+	// 添加 WHERE 条件
+	if filter != nil && len(filter.Filters) > 0 {
+		whereConditions := s.buildWhereConditions(filter.Filters)
+		if len(whereConditions) > 0 {
+			sql += " WHERE " + strings.Join(whereConditions, " AND ")
+		}
 	}
 
-	// 限制返回行数 (避免大量数据)
-	sql += " LIMIT 1000"
+	// 添加 GROUP BY
+	if len(groupByFields) > 0 {
+		sql += " GROUP BY " + strings.Join(groupByFields, ", ")
+	}
+
+	// 添加 ORDER BY
+	for _, field := range yAxisConfig.Fields {
+		if field.Sort != "" {
+			sql += fmt.Sprintf(" ORDER BY %s %s", field.Name, field.Sort)
+			break // 只取第一个排序字段
+		}
+	}
+
+	// 添加 LIMIT
+	if filter != nil && filter.Limit > 0 {
+		sql += fmt.Sprintf(" LIMIT %d", filter.Limit)
+		if filter.Offset > 0 {
+			sql += fmt.Sprintf(" OFFSET %d", filter.Offset)
+		}
+	} else {
+		sql += " LIMIT 1000" // 默认限制
+	}
 
 	return sql, nil
 }
@@ -156,11 +212,11 @@ func (s *chartDataService) extractFields(config map[string]interface{}) []string
 
 // executeQuery 执行 SQL 查询
 func (s *chartDataService) executeQuery(ctx context.Context, sql string) ([]map[string]interface{}, error) {
-	if engine.Client == nil {
+	if s.calcite == nil {
 		return nil, fmt.Errorf("calcite engine not initialized")
 	}
 
-	return engine.Client.ExecuteQuery(ctx, sql)
+	return s.calcite.ExecuteQuery(ctx, sql)
 }
 
 // joinFields 连接字段名

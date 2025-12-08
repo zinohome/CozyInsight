@@ -6,7 +6,6 @@ import (
 	"os"
 
 	v1 "cozy-insight-backend/api/v1"
-	"cozy-insight-backend/internal/engine"
 	"cozy-insight-backend/pkg/config"
 	"cozy-insight-backend/pkg/database"
 	"cozy-insight-backend/pkg/logger"
@@ -36,16 +35,7 @@ func main() {
 	}
 	logger.Log.Info("Database connected successfully")
 
-	logger.Log.Info("Database connected successfully")
-
-	// 4. Init Calcite Engine
-	if err := engine.InitCalciteClient(cfg.Calcite); err != nil {
-		logger.Log.Warn("Failed to connect to Avatica Server (SQL Engine might be unavailable)", zap.Error(err))
-	} else {
-		logger.Log.Info("Calcite Engine connected successfully")
-	}
-
-	// 5. Setup Router
+	// 4. Setup Router
 	if cfg.Server.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
 	}

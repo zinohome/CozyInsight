@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"cozy-insight-backend/internal/engine"
 	"cozy-insight-backend/internal/model"
 	"cozy-insight-backend/internal/repository"
 	"fmt"
@@ -17,18 +18,24 @@ type DatasourceService interface {
 	GetByID(ctx context.Context, id string) (*model.Datasource, error)
 	List(ctx context.Context) ([]*model.Datasource, error)
 
-	// 新增方法
-	Validate(ctx context.Context, id string) error
-	GetTables(ctx context.Context, id string) ([]string, error)
-	GetTableFields(ctx context.Context, id string, tableName string) ([]map[string]interface{}, error)
+	// 连接测试和元数据查询
+	TestConnection(ctx context.Context, id string) (*engine.ConnectionTestResult, error)
+	TestConnectionByConfig(ctx context.Context, config string) (*engine.ConnectionTestResult, error)
+	GetDatabases(ctx context.Context, id string) ([]string, error)
+	GetTables(ctx context.Context, id string, database string) ([]string, error)
+	GetTableSchema(ctx context.Context, id string, database, table string) ([]map[string]interface{}, error)
 }
 
 type datasourceService struct {
-	repo repository.DatasourceRepository
+	repo      repository.DatasourceRepository
+	connector *engine.DatasourceConnector
 }
 
-func NewDatasourceService(repo repository.DatasourceRepository) DatasourceService {
-	return &datasourceService{repo: repo}
+func NewDatasourceService(repo repository.DatasourceRepository, connector *engine.DatasourceConnector) DatasourceService {
+	return &datasourceService{
+		repo:      repo,
+		connector: connector,
+	}
 }
 
 func (s *datasourceService) Create(ctx context.Context, ds *model.Datasource) error {
@@ -57,52 +64,49 @@ func (s *datasourceService) List(ctx context.Context) ([]*model.Datasource, erro
 	return s.repo.List(ctx)
 }
 
-// Validate 验证数据源连接
-func (s *datasourceService) Validate(ctx context.Context, id string) error {
+// TestConnection 测试数据源连接（通过 ID）
+func (s *datasourceService) TestConnection(ctx context.Context, id string) (*engine.ConnectionTestResult, error) {
 	// 获取数据源配置
 	ds, err := s.repo.GetByID(ctx, id)
 	if err != nil {
-		return fmt.Errorf("datasource not found: %w", err)
+		return nil, fmt.Errorf("datasource not found: %w", err)
 	}
 
-	// 简单验证：检查配置是否完整
-	if ds.Type == "" || ds.Name == "" {
-		return fmt.Errorf("incomplete datasource configuration")
+	// 使用连接器测试连接
+	return s.connector.TestConnection(ctx, ds.Configuration)
+}
+
+// TestConnectionByConfig 测试数据源连接（通过配置）
+func (s *datasourceService) TestConnectionByConfig(ctx context.Context, config string) (*engine.ConnectionTestResult, error) {
+	return s.connector.TestConnection(ctx, config)
+}
+
+// GetDatabases 获取数据源的数据库列表
+func (s *datasourceService) GetDatabases(ctx context.Context, id string) ([]string, error) {
+	ds, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("datasource not found: %w", err)
 	}
 
-	// TODO: 实际应该连接数据库测试
-	// 这里简化处理，仅返回成功
-	return nil
+	return s.connector.GetDatabaseList(ctx, ds.Configuration)
 }
 
 // GetTables 获取数据源的表列表
-func (s *datasourceService) GetTables(ctx context.Context, id string) ([]string, error) {
-	// 获取数据源配置
-	_, err := s.repo.GetByID(ctx, id)
+func (s *datasourceService) GetTables(ctx context.Context, id string, database string) ([]string, error) {
+	ds, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("datasource not found: %w", err)
 	}
 
-	// TODO: 实际应该通过 Calcite 或数据库驱动获取表列表
-	// 这里返回模拟数据
-	tables := []string{"users", "orders", "products", "categories"}
-	return tables, nil
+	return s.connector.GetTableList(ctx, ds.Configuration, database)
 }
 
-// GetTableFields 获取表的字段列表
-func (s *datasourceService) GetTableFields(ctx context.Context, id string, tableName string) ([]map[string]interface{}, error) {
-	// 获取数据源配置
-	_, err := s.repo.GetByID(ctx, id)
+// GetTableSchema 获取表结构
+func (s *datasourceService) GetTableSchema(ctx context.Context, id string, database, table string) ([]map[string]interface{}, error) {
+	ds, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("datasource not found: %w", err)
 	}
 
-	// TODO: 实际应该通过 Calcite 或数据库驱动获取字段列表
-	// 这里返回模拟数据
-	fields := []map[string]interface{}{
-		{"name": "id", "type": "INTEGER"},
-		{"name": "name", "type": "VARCHAR"},
-		{"name": "created_at", "type": "TIMESTAMP"},
-	}
-	return fields, nil
+	return s.connector.GetTableSchema(ctx, ds.Configuration, database, table)
 }

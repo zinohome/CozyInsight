@@ -1,0 +1,12 @@
+# Avatica Server JAR
+avatica-server*.jar
+
+# JDBC Drivers
+drivers/*.jar
+
+# Logs
+logs/
+*.log
+
+# Configuration (if contains sensitive data)
+# application.yml

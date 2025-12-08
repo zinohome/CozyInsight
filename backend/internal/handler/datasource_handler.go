@@ -77,45 +77,81 @@ func (h *DatasourceHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, list)
 }
 
-// Validate 测试数据源连接
-func (h *DatasourceHandler) Validate(c *gin.Context) {
+// TestConnection 测试数据源连接（使用已保存的数据源 ID）
+func (h *DatasourceHandler) TestConnection(c *gin.Context) {
 	id := c.Param("id")
-	err := h.svc.Validate(c.Request.Context(), id)
+	result, err := h.svc.TestConnection(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"status": "error", "message": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "连接成功"})
+	c.JSON(http.StatusOK, result)
+}
+
+// TestConnectionByConfig 测试数据源连接（使用配置 JSON，无需保存）
+func (h *DatasourceHandler) TestConnectionByConfig(c *gin.Context) {
+	type TestRequest struct {
+		Configuration string `json:"configuration"`
+	}
+
+	var req TestRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	result, err := h.svc.TestConnectionByConfig(c.Request.Context(), req.Configuration)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+// GetDatabases 获取数据源的数据库列表
+func (h *DatasourceHandler) GetDatabases(c *gin.Context) {
+	id := c.Param("id")
+	databases, err := h.svc.GetDatabases(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"databases": databases})
 }
 
 // GetTables 获取数据源的表列表
 func (h *DatasourceHandler) GetTables(c *gin.Context) {
 	id := c.Param("id")
-	tables, err := h.svc.GetTables(c.Request.Context(), id)
+	database := c.Query("database")
+
+	tables, err := h.svc.GetTables(c.Request.Context(), id, database)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, tables)
+	c.JSON(http.StatusOK, gin.H{"tables": tables})
 }
 
-// GetFields 获取表的字段列表
-func (h *DatasourceHandler) GetFields(c *gin.Context) {
+// GetTableSchema 获取表结构
+func (h *DatasourceHandler) GetTableSchema(c *gin.Context) {
 	id := c.Param("id")
-	tableName := c.Query("table")
+	database := c.Query("database")
+	table := c.Query("table")
 
-	if tableName == "" {
+	if table == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "table name is required"})
 		return
 	}
 
-	fields, err := h.svc.GetTableFields(c.Request.Context(), id, tableName)
+	schema, err := h.svc.GetTableSchema(c.Request.Context(), id, database, table)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, fields)
+	c.JSON(http.StatusOK, gin.H{"schema": schema})
 }
