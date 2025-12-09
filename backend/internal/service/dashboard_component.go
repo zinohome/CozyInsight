@@ -117,7 +117,7 @@ func (s *dashboardService) UpdateLayout(ctx context.Context, dashboardID string,
 
 	// 同时更新组件表
 	if len(layout.Components) > 0 {
-		if err := s.SaveComponents(ctx, dashboardID, &layout.Components); err != nil {
+		if err := s.SaveComponentsBatch(ctx, dashboardID, &layout.Components); err != nil {
 			return fmt.Errorf("failed to save components: %w", err)
 		}
 	}

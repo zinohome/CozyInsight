@@ -4,26 +4,12 @@ import (
 	"context"
 	"cozy-insight-backend/internal/model"
 	"cozy-insight-backend/internal/repository"
-	"cozy-insight-backend/pkg/logger"
 	"errors"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
-
-// TestMain 在所有测试运行前初始化
-func TestMain(m *testing.M) {
-	// 初始化 logger (使用 debug 级别用于测试)
-	logger.InitLogger("debug")
-
-	// 运行测试
-	code := m.Run()
-
-	// 退出
-	os.Exit(code)
-}
 
 // MockChartRepository 是 ChartRepository 的 mock 实现
 type MockChartRepository struct {

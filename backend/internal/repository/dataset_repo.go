@@ -11,6 +11,9 @@ import (
 type DatasetRepository interface {
 	// Dataset Group
 	CreateGroup(ctx context.Context, group *model.DatasetGroup) error
+	UpdateGroup(ctx context.Context, group *model.DatasetGroup) error
+	DeleteGroup(ctx context.Context, id string) error
+	GetGroup(ctx context.Context, id string) (*model.DatasetGroup, error)
 	ListGroups(ctx context.Context) ([]*model.DatasetGroup, error)
 
 	// Dataset Table
@@ -34,6 +37,23 @@ func NewDatasetRepository() DatasetRepository {
 
 func (r *datasetRepository) CreateGroup(ctx context.Context, group *model.DatasetGroup) error {
 	return database.DB.WithContext(ctx).Create(group).Error
+}
+
+func (r *datasetRepository) UpdateGroup(ctx context.Context, group *model.DatasetGroup) error {
+	return database.DB.WithContext(ctx).Save(group).Error
+}
+
+func (r *datasetRepository) DeleteGroup(ctx context.Context, id string) error {
+	return database.DB.WithContext(ctx).Delete(&model.DatasetGroup{}, "id = ?", id).Error
+}
+
+func (r *datasetRepository) GetGroup(ctx context.Context, id string) (*model.DatasetGroup, error) {
+	var group model.DatasetGroup
+	err := database.DB.WithContext(ctx).First(&group, "id = ?", id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &group, nil
 }
 
 func (r *datasetRepository) ListGroups(ctx context.Context) ([]*model.DatasetGroup, error) {

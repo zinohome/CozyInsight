@@ -12,7 +12,7 @@ type DatasetGroupService interface {
 	DeleteGroup(ctx context.Context, id string) error
 	GetGroup(ctx context.Context, id string) (*model.DatasetGroup, error)
 	ListGroups(ctx context.Context) ([]*model.DatasetGroup, error)
-	
+
 	// 获取树形结构
 	GetGroupTree(ctx context.Context) ([]*model.DatasetGroupTree, error)
 }
@@ -57,25 +57,25 @@ func (s *datasetGroupService) GetGroupTree(ctx context.Context) ([]*model.Datase
 // buildTree 构建树形结构
 func buildTree(groups []*model.DatasetGroup, pid string) []*model.DatasetGroupTree {
 	var result []*model.DatasetGroupTree
-	
+
 	for _, group := range groups {
-		if group.Pid == pid {
+		if group.PID == pid {
 			node := &model.DatasetGroupTree{
 				ID:    group.ID,
 				Name:  group.Name,
-				Pid:   group.Pid,
+				Pid:   group.PID,
 				Level: group.Level,
 				Type:  group.Type,
 			}
-			
+
 			children := buildTree(groups, group.ID)
 			if len(children) > 0 {
 				node.Children = children
 			}
-			
+
 			result = append(result, node)
 		}
 	}
-	
+
 	return result
 }
