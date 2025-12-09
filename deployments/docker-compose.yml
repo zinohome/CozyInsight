@@ -1,0 +1,103 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: cozy-insight-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
+      MYSQL_DATABASE: cozy_insight
+      MYSQL_USER: cozyinsight
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-cozy123}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - cozy-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: cozy-insight-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - cozy-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  avatica:
+    build: ./avatica
+    container_name: cozy-insight-avatica
+    ports:
+      - "8765:8765"
+    environment:
+      JAVA_OPTS: "-Xms1g -Xmx2g"
+    networks:
+      - cozy-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8765"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  backend:
+    build:
+      context: ../../
+      dockerfile: backend/Dockerfile
+    container_name: cozy-insight-backend
+    ports:
+      - "8100:8100"
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: cozyinsight
+      DB_PASSWORD: ${MYSQL_PASSWORD:-cozy123}
+      DB_NAME: cozy_insight
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      AVATICA_URL: http://avatica:8765
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      avatica:
+        condition: service_healthy
+    networks:
+      - cozy-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
+    container_name: cozy-insight-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - cozy-network
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  cozy-network:
+    driver: bridge

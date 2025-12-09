@@ -22,6 +22,8 @@ type DatasetRepository interface {
 	// Dataset Fields
 	SaveFields(ctx context.Context, fields []*model.DatasetTableField) error
 	GetFields(ctx context.Context, tableId string) ([]*model.DatasetTableField, error)
+	DeleteFieldsByTableID(ctx context.Context, tableId string) error
+	BatchCreateFields(ctx context.Context, fields []*model.DatasetTableField) error
 }
 
 type datasetRepository struct{}
@@ -86,4 +88,15 @@ func (r *datasetRepository) GetFields(ctx context.Context, tableId string) ([]*m
 	var list []*model.DatasetTableField
 	err := database.DB.WithContext(ctx).Where("dataset_table_id = ?", tableId).Order("column_index").Find(&list).Error
 	return list, err
+}
+
+func (r *datasetRepository) DeleteFieldsByTableID(ctx context.Context, tableId string) error {
+	return database.DB.WithContext(ctx).Where("dataset_table_id = ?", tableId).Delete(&model.DatasetTableField{}).Error
+}
+
+func (r *datasetRepository) BatchCreateFields(ctx context.Context, fields []*model.DatasetTableField) error {
+	if len(fields) == 0 {
+		return nil
+	}
+	return database.DB.WithContext(ctx).Create(&fields).Error
 }

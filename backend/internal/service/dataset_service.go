@@ -137,14 +137,46 @@ func (s *datasetService) GetFields(ctx context.Context, id string) ([]*FieldInfo
 
 // SyncFields 同步字段（保存到数据库）
 func (s *datasetService) SyncFields(ctx context.Context, id string) error {
+	// 获取数据集表信息
+	table, err := s.repo.GetTable(ctx, id)
+	if err != nil {
+		return fmt.Errorf("table not found: %w", err)
+	}
+
+	// 获取字段信息
 	fields, err := s.GetFields(ctx, id)
 	if err != nil {
 		return err
 	}
 
-	// TODO: 保存到 core_dataset_table_field 表
-	// 这里简化处理，实际应该通过 repository 保存
-	_ = fields
+	// 先删除旧字段
+	if err := s.repo.DeleteFieldsByTableID(ctx, id); err != nil {
+		return fmt.Errorf("failed to delete old fields: %w", err)
+	}
+
+	// 转换为模型并批量创建
+	modelFields := make([]*model.DatasetTableField, 0, len(fields))
+	for i, field := range fields {
+		modelField := &model.DatasetTableField{
+			ID:             uuid.New().String(),
+			DatasourceID:   table.DatasourceID,
+			DatasetTableID: id,
+			DatasetGroupID: table.DatasetGroupID,
+			OriginName:     field.OriginName,
+			Name:           field.Name,
+			Type:           field.Type,
+			DeType:         field.DeType,
+			GroupType:      field.GroupType,
+			Checked:        true, // 默认选中
+			ColumnIndex:    i,
+		}
+		modelFields = append(modelFields, modelField)
+	}
+
+	// 批量创建
+	if err := s.repo.BatchCreateFields(ctx, modelFields); err != nil {
+		return fmt.Errorf("failed to create fields: %w", err)
+	}
 
 	return nil
 }

@@ -28,6 +28,7 @@ export type ChartType =
     | 'map'           // 地图
     | 'gauge'         // 仪表盘
     | 'radar'         // 雷达图
+    | 'heatmap'       // 热力图
     | 'funnel'        // 漏斗图
     | 'wordcloud';    // 词云
 
@@ -110,8 +111,21 @@ export interface ChartCustomStyle {
 }
 // 统一的图表配置接口
 export interface ChartConfig {
+    // 通用配置
+    xField?: string;
+    yField?: string;
+    seriesField?: string;
+    colorField?: string;
+    sizeField?: string;
+
+    // 原有配置
     xAxis?: ChartAxisConfig;
     yAxis?: ChartAxisConfig;
     customAttr?: ChartCustomAttr;
     customStyle?: ChartCustomStyle;
+
+    // 其他可选配置
+    title?: string;
+    smooth?: boolean;
+    [key: string]: any; // 允许其他自定义配置
 }

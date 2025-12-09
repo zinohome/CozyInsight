@@ -23,14 +23,30 @@ type DashboardService interface {
 	Publish(ctx context.Context, id string) error
 	Unpublish(ctx context.Context, id string) error
 	GetPublished(ctx context.Context, id string) (*model.Dashboard, error)
+
+	// 组件管理
+	SaveComponents(ctx context.Context, dashboardID string, components []*model.DashboardComponent) error
+	GetComponents(ctx context.Context, dashboardID string) ([]*model.DashboardComponent, error)
+	GetDashboardWithComponents(ctx context.Context, dashboardID string) (*DashboardWithComponents, error)
+	UpdateLayout(ctx context.Context, dashboardID string, layout *model.DashboardLayout) error
+}
+
+// DashboardWithComponents 带组件的仪表板  
+type DashboardWithComponents struct {
+	Dashboard  *model.Dashboard            `json:"dashboard"`
+	Components []*model.DashboardComponent `json:"components"`
 }
 
 type dashboardService struct {
-	repo repository.DashboardRepository
+	repo          repository.DashboardRepository
+	componentRepo repository.DashboardComponentRepository
 }
 
-func NewDashboardService(repo repository.DashboardRepository) DashboardService {
-	return &dashboardService{repo: repo}
+func NewDashboardService(repo repository.DashboardRepository, componentRepo repository.DashboardComponentRepository) DashboardService {
+	return &dashboardService{
+		repo:          repo,
+		componentRepo: componentRepo,
+	}
 }
 
 // Create 创建仪表板
