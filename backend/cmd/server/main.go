@@ -49,6 +49,10 @@ func main() {
 	permissionRepo := repository.NewPermissionRepository()
 	shareRepo := repository.NewShareRepository()
 	scheduleRepo := repository.NewScheduleRepository()
+	operLogRepo := repository.NewOperLogRepository()
+	systemSettingRepo := repository.NewSystemSettingRepository()
+	calculatedFieldRepo := repository.NewCalculatedFieldRepository()
+	rowPermissionRepo := repository.NewRowPermissionRepository()
 
 	// 初始化Service
 	authService := service.NewAuthService(authRepo)
@@ -62,6 +66,11 @@ func main() {
 	exportService := service.NewExportService()
 	shareService := service.NewShareService(shareRepo)
 	scheduleService := service.NewScheduleService(scheduleRepo)
+	operLogService := service.NewOperLogService(operLogRepo)
+	systemSettingService := service.NewSystemSettingService(systemSettingRepo)
+	calculatedFieldService := service.NewCalculatedFieldService(calculatedFieldRepo)
+	datasetGroupService := service.NewDatasetGroupService(datasetRepo)
+	rowPermissionService := service.NewRowPermissionService(rowPermissionRepo, roleRepo)
 
 	// 启动定时任务调度器
 	if err := scheduleService.Start(); err != nil {
@@ -80,6 +89,11 @@ func main() {
 	exportHandler := handler.NewExportHandler(exportService, datasetService, chartDataService)
 	shareHandler := handler.NewShareHandler(shareService)
 	scheduleHandler := handler.NewScheduleHandler(scheduleService)
+	operLogHandler := handler.NewOperLogHandler(operLogService)
+	systemSettingHandler := handler.NewSystemSettingHandler(systemSettingService)
+	calculatedFieldHandler := handler.NewCalculatedFieldHandler(calculatedFieldService)
+	datasetGroupHandler := handler.NewDatasetGroupHandler(datasetGroupService)
+	rowPermissionHandler := handler.NewRowPermissionHandler(rowPermissionService)
 
 	// API路由组
 	api := r.Group("/api/v1")
@@ -202,6 +216,45 @@ func main() {
 				schedule.POST("/:id/enable", scheduleHandler.Enable)
 				schedule.POST("/:id/disable", scheduleHandler.Disable)
 				schedule.POST("/:id/execute", scheduleHandler.Execute)
+			}
+
+			// 操作日志
+			operLog := authenticated.Group("/log")
+			{
+				operLog.GET("", operLogHandler.List)
+				operLog.POST("/clean", operLogHandler.CleanOld)
+			}
+
+			// 系统设置
+			setting := authenticated.Group("/setting")
+			{
+				setting.GET("/:key", systemSettingHandler.Get)
+				setting.POST("", systemSettingHandler.Set)
+				setting.GET("/type/:type", systemSettingHandler.ListByType)
+				setting.DELETE("/:key", systemSettingHandler.Delete)
+			}
+
+			// 计算字段管理
+			calculatedField := authenticated.Group("/dataset/calculated-field")
+			{
+				calculatedField.POST("", calculatedFieldHandler.Create)
+				calculatedField.GET("/table/:tableId", calculatedFieldHandler.List)
+				calculatedField.DELETE("/:id", calculatedFieldHandler.Delete)
+			}
+
+			// 数据集分组
+			datasetGroup := authenticated.Group("/dataset/group")
+			{
+				datasetGroup.GET("/tree", datasetGroupHandler.GetTree)
+				datasetGroup.GET("", datasetGroupHandler.List)
+			}
+
+			// 行级权限
+			rowPerm := authenticated.Group("/permission/row")
+			{
+				rowPerm.POST("/dataset/:datasetId", rowPermissionHandler.Create)
+				rowPerm.GET("/dataset/:datasetId", rowPermissionHandler.List)
+				rowPerm.DELETE("/:id", rowPermissionHandler.Delete)
 			}
 		}
 

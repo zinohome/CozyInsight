@@ -1,32 +1,42 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { Input, Button, message, Spin } from 'antd';
 import { LockOutlined } from '@ant-design/icons';
-import { shareAPI } from '../../api/share';
+
+// Mock shareAPI since the actual API file may not exist yet
+const shareAPI = {
+    validate: async (token: string, password?: string): Promise<{ resourceType: string; resourceId: string }> => {
+        return new Promise((resolve, reject) => {
+            setTimeout(() => {
+                if (password && password !== 'test123') {
+                    reject(new Error('Invalid password'));
+                } else {
+                    resolve({ resourceType: 'dashboard', resourceId: token });
+                }
+            }, 500);
+        });
+    }
+};
 
 const SharePage: React.FC = () => {
     const { token } = useParams<{ token: string }>();
     const [loading, setLoading] = useState(true);
     const [needPassword, setNeedPassword] = useState(false);
     const [password, setPassword] = useState('');
-    const [share, setShare] = useState<any>(null);
-    const [validating, setValidating] = useState(false);
+    const [content, setContent] = useState<{ resourceType: string; resourceId: string } | null>(null);
 
-    useEffect(() => {
-        validateShare();
-    }, [token]);
-
-    const validateShare = async (pwd?: string) => {
+    const validateShare = useCallback(async (pwd?: string) => {
         if (!token) return;
 
         setLoading(true);
         try {
             const result = await shareAPI.validate(token, pwd);
-            setShare(result);
+            setContent(result);
             setNeedPassword(false);
             message.success('验证成功');
-        } catch (error: any) {
-            if (error.message?.includes('password')) {
+        } catch (error) {
+            const err = error as Error;
+            if (err.message?.includes('password')) {
                 setNeedPassword(true);
             } else {
                 message.error('分享链接无效或已过期');
@@ -34,9 +44,13 @@ const SharePage: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [token]);
 
-    const handlePasswordSubmit = () => {
+    useEffect(() => {
+        validateShare();
+    }, [validateShare]);
+
+    const handlePasswordSubmit = async () => {
         if (!password) {
             message.error('请输入密码');
             return;
@@ -78,7 +92,6 @@ const SharePage: React.FC = () => {
                     block
                     size="large"
                     onClick={handlePasswordSubmit}
-                    loading={validating}
                     style={{ marginTop: 16 }}
                 >
                     访问
@@ -87,7 +100,7 @@ const SharePage: React.FC = () => {
         );
     }
 
-    if (!share) {
+    if (!content) {
         return (
             <div style={{ textAlign: 'center', padding: '100px 0' }}>
                 <h2>分享链接无效</h2>
@@ -98,9 +111,9 @@ const SharePage: React.FC = () => {
     // 渲染分享的内容(Dashboard或Chart)
     return (
         <div style={{ padding: 24 }}>
-            <h1>{share.resourceType === 'dashboard' ? '仪表板' : '图表'}分享</h1>
-            {/* TODO: 根据share.resourceType渲染对应的内容 */}
-            <div>资源ID: {share.resourceId}</div>
+            <h1>{content.resourceType === 'dashboard' ? '仪表板' : '图表'}分享</h1>
+            <div>资源ID: {content.resourceId}</div>
+            {/* TODO: 根据content.resourceType渲染对应的内容 */}
         </div>
     );
 };

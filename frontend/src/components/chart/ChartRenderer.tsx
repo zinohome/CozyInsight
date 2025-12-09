@@ -12,6 +12,7 @@ import FunnelChart from './impl/FunnelChart';
 import GaugeChart from './impl/GaugeChart';
 import WordCloudChart from './impl/WordCloudChart';
 import ColumnChart from './impl/ColumnChart';
+import MapChart from './impl/MapChart';
 import type { ChartType, ChartConfig } from '../../types/chart';
 
 interface ChartRendererProps {
@@ -69,6 +70,8 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({
             return <GaugeChart {...commonProps} />;
         case 'wordcloud':
             return <WordCloudChart {...commonProps} />;
+        case 'map':
+            return <MapChart {...commonProps} />;
         default:
             return (
                 <div style={{ ...style, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>

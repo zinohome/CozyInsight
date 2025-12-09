@@ -271,3 +271,160 @@ ON DUPLICATE KEY UPDATE `name` = `name`;
 -- ON DUPLICATE KEY UPDATE `username` = `username`;
 
 COMMIT;
+
+-- ============================================
+-- 系统管理表 (新增)
+-- ============================================
+
+-- 操作日志表
+CREATE TABLE IF NOT EXISTS `sys_oper_log` (
+  `id` VARCHAR(50) PRIMARY KEY,
+  `user_id` VARCHAR(50),
+  `username` VARCHAR(100),
+  `module` VARCHAR(100) COMMENT 'datasource, dataset, chart, dashboard',
+  `action` VARCHAR(50) COMMENT 'create, update, delete, view, export',
+  `detail` TEXT COMMENT '操作详情JSON',
+  `resource_id` VARCHAR(50),
+  `ip` VARCHAR(50),
+  `user_agent` VARCHAR(255),
+  `status` INT DEFAULT 1 COMMENT '1=成功 0=失败',
+  `error_msg` TEXT,
+  `create_time` BIGINT,
+  INDEX idx_user (user_id),
+  INDEX idx_module (module),
+  INDEX idx_resource (resource_id),
+  INDEX idx_create_time (create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='操作日志表';
+
+-- 系统设置表
+CREATE TABLE IF NOT EXISTS `sys_setting` (
+  `id` VARCHAR(50) PRIMARY KEY,
+  `type` VARCHAR(50) COMMENT 'email, auth, system, display',
+  `setting_key` VARCHAR(100) UNIQUE,
+  `value` TEXT,
+  `update_time` BIGINT,
+  `update_by` VARCHAR(50),
+  INDEX idx_type (type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='系统设置表';
+
+-- 数据集计算字段表
+CREATE TABLE IF NOT EXISTS `dataset_table_field_calculated` (
+  `id` VARCHAR(50) PRIMARY KEY,
+  `dataset_table_id` VARCHAR(50) NOT NULL,
+  `field_name` VARCHAR(255),
+  `display_name` VARCHAR(255),
+  `expression` TEXT COMMENT '计算公式',
+  `data_type` VARCHAR(50) COMMENT 'string, long, double, date',
+  `create_time` BIGINT,
+  `update_time` BIGINT,
+  INDEX idx_table (dataset_table_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='数据集计算字段';
+
+-- ============================================
+-- Dashboard高级功能表 (新增)
+-- ============================================
+
+-- Dashboard联动配置表
+CREATE TABLE IF NOT EXISTS `dashboard_linkage` (
+  `id` VARCHAR(50) PRIMARY KEY,
+  `dashboard_id` VARCHAR(50) NOT NULL,
+  `source_component_id` VARCHAR(50) NOT NULL,
+  `target_component_id` VARCHAR(50) NOT NULL,
+  `source_field_id` VARCHAR(50),
+  `target_field_id` VARCHAR(50),
+  `linkage_type` VARCHAR(50) COMMENT 'click, hover, select',
+  `update_type` VARCHAR(50) COMMENT 'replace, append',
+  `enable` TINYINT DEFAULT 1,
+  `create_time` BIGINT,
+  `update_time` BIGINT,
+  INDEX idx_dashboard (dashboard_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='仪表板联动配置';
+
+--  Dashboard参数表
+CREATE TABLE IF NOT EXISTS `dashboard_parameter` (
+  `id` VARCHAR(50) PRIMARY KEY,
+  `dashboard_id` VARCHAR(50) NOT NULL,
+  `name` VARCHAR(200),
+  `param_type` VARCHAR(50) COMMENT 'text, date, select, multiselect',
+  `default_value` VARCHAR(500),
+  `options` TEXT COMMENT 'JSON数组',
+  `required` TINYINT DEFAULT 0,
+  `enable` TINYINT DEFAULT 1,
+  `create_time` BIGINT,
+  `update_time` BIGINT,
+  INDEX idx_dashboard (dashboard_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='仪表板参数';
+
+-- Dashboard Tab容器表
+CREATE TABLE IF NOT EXISTS `dashboard_tab` (
+  `id` VARCHAR(50) PRIMARY KEY,
+  `dashboard_id` VARCHAR(50) NOT NULL,
+  `name` VARCHAR(200),
+  `order` INT DEFAULT 0,
+  `component_ids` TEXT COMMENT 'JSON数组',
+  `create_time` BIGINT,
+  `update_time` BIGINT,
+  INDEX idx_dashboard (dashboard_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Dashboard Tab容器';
+
+-- 图表联动配置表
+CREATE TABLE IF NOT EXISTS `chart_view_linkage` (
+  `id` VARCHAR(50) PRIMARY KEY,
+  `source_view_id` VARCHAR(50) NOT NULL,
+  `target_view_id` VARCHAR(50) NOT NULL,
+  `source_field_id` VARCHAR(50),
+  `target_field_id` VARCHAR(50),
+  `linkage_type` VARCHAR(50) COMMENT 'click, hover',
+  `update_type` VARCHAR(50) COMMENT 'replace, append',
+  `ext` TEXT COMMENT 'JSON扩展配置',
+  `create_time` BIGINT,
+  `update_time` BIGINT,
+  INDEX idx_source (source_view_id),
+  INDEX idx_target (target_view_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='图表联动配置';
+
+-- 图表钻取配置表
+CREATE TABLE IF NOT EXISTS `chart_view_drill` (
+  `id` VARCHAR(50) PRIMARY KEY,
+  `chart_view_id` VARCHAR(50) NOT NULL,
+  `field_id` VARCHAR(50),
+  `drill_fields` TEXT COMMENT 'JSON钻取字段数组',
+  `drill_type` VARCHAR(50) COMMENT 'down, up',
+  `create_time` BIGINT,
+  `update_time` BIGINT,
+  INDEX idx_chart (chart_view_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='图表钻取配置';
+
+-- 数据集行级权限表
+CREATE TABLE IF NOT EXISTS `dataset_row_permissions` (
+  `id` VARCHAR(50) PRIMARY KEY,
+  `dataset_id` VARCHAR(50) NOT NULL,
+  `auth_target_type` VARCHAR(50) COMMENT 'user, role, dept',
+  `auth_target_id` VARCHAR(50),
+  `where_condition` TEXT COMMENT 'SQL WHERE条件',
+  `express_type` VARCHAR(50) COMMENT 'sql, formula',
+  `enable` TINYINT DEFAULT 1,
+  `create_time` BIGINT,
+  `update_time` BIGINT,
+  `create_by` VARCHAR(50),
+  INDEX idx_dataset (dataset_id),
+  INDEX idx_target (authI_target_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='数据集行级权限';
+
+-- 图表模板表
+CREATE TABLE IF NOT EXISTS `chart_template` (
+  `id` VARCHAR(50) PRIMARY KEY,
+  `name` VARCHAR(200),
+  `type` VARCHAR(50),
+  `category` VARCHAR(50) COMMENT 'business, stat, custom',
+  `config` TEXT COMMENT '模板配置JSON',
+  `preview` VARCHAR(500),
+  `is_system` TINYINT DEFAULT 0,
+  `is_public` TINYINT DEFAULT 0,
+  `create_time` BIGINT,
+  `update_time` BIGINT,
+  `create_by` VARCHAR(50)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='图表模板';
+
+COMMIT;
+

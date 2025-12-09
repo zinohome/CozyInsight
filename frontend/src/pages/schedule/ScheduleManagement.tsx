@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Table, Button, Modal, Form, Input, Switch, Select, message, Space, Tag, Popconfirm } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined, PauseCircleOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
@@ -14,57 +14,153 @@ interface ScheduleTask {
     createTime: number;
 }
 
+// Mock API for schedule tasks
+const scheduleAPI = {
+    list: async (): Promise<ScheduleTask[]> => {
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                resolve([
+                    { id: '1', name: '每日邮件报告', type: 'email_report', cronExpr: '0 0 * * *', enabled: true, status: 'active', lastRunTime: Date.now() - 3600000, createTime: Date.now() - 86400000 },
+                    { id: '2', name: '数据库快照', type: 'snapshot', cronExpr: '0 2 * * *', enabled: false, status: 'inactive', lastRunTime: 0, createTime: Date.now() - 172800000 },
+                    { id: '3', name: '数据同步到BI', type: 'data_sync', cronExpr: '0 */6 * * *', enabled: true, status: 'running', lastRunTime: Date.now() - 7200000, createTime: Date.now() - 259200000 },
+                ]);
+            }, 500);
+        });
+    },
+    create: async (task: Partial<ScheduleTask>): Promise<ScheduleTask> => {
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                const newTask = { ...task, id: String(Date.now()), status: task.enabled ? 'active' : 'inactive', lastRunTime: 0, createTime: Date.now() } as ScheduleTask;
+                resolve(newTask);
+            }, 500);
+        });
+    },
+    update: async (_id: string, task: Partial<ScheduleTask>): Promise<ScheduleTask> => {
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                resolve({ ...task, id: _id } as ScheduleTask);
+            }, 500);
+        });
+    },
+    delete: async (_id: string): Promise<void> => {
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                resolve();
+            }, 500);
+        });
+    },
+    enable: async (_id: string): Promise<void> => {
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                resolve();
+            }, 500);
+        });
+    },
+    disable: async (_id: string): Promise<void> => {
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                resolve();
+            }, 500);
+        });
+    },
+    execute: async (_id: string): Promise<void> => {
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                resolve();
+            }, 500);
+        });
+    },
+};
+
 const ScheduleManagement: React.FC = () => {
     const [tasks, setTasks] = useState<ScheduleTask[]>([]);
     const [loading, setLoading] = useState(false);
     const [modalVisible, setModalVisible] = useState(false);
-    const [editingTask, setEditingTask] = useState<ScheduleTask | null>(null);
+    const [editingTask, setEditingTask] = useState<ScheduleTask | undefined>();
     const [form] = Form.useForm();
 
-    // Mock数据加载
-    const loadTasks = async () => {
+    const loadTasks = useCallback(async () => {
         setLoading(true);
-        // TODO: 调用API
-        setLoading(false);
-    };
+        try {
+            const data = await scheduleAPI.list();
+            setTasks(data);
+        } catch (error) {
+            message.error('加载任务失败');
+        } finally {
+            setLoading(false);
+        }
+    }, []);
 
     useEffect(() => {
         loadTasks();
-    }, []);
+    }, [loadTasks]);
 
     const handleOpenModal = (task?: ScheduleTask) => {
-        setEditingTask(task || null);
+        setEditingTask(task);
         if (task) {
             form.setFieldsValue(task);
         } else {
             form.resetFields();
+            form.setFieldsValue({ enabled: true }); // Default to enabled for new tasks
         }
         setModalVisible(true);
+    };
+
+    const handleCloseModal = () => {
+        setModalVisible(false);
+        setEditingTask(undefined);
+        form.resetFields();
     };
 
     const handleSave = async () => {
         try {
             const values = await form.validateFields();
-            message.success(editingTask ? '更新成功' : '创建成功');
-            setModalVisible(false);
+            if (editingTask) {
+                await scheduleAPI.update(editingTask.id, values);
+                message.success('更新成功');
+            } else {
+                await scheduleAPI.create(values);
+                message.success('创建成功');
+            }
+            handleCloseModal();
             loadTasks();
-        } catch (error: any) {
-            message.error(error.message || '保存失败');
+        } catch (error) {
+            message.error('操作失败');
         }
     };
 
-    const handleDelete = async (id: string) => {
-        message.success('删除成功');
-        loadTasks();
+    const handleDelete = async (taskId: string) => {
+        try {
+            await scheduleAPI.delete(taskId);
+            message.success('删除成功');
+            loadTasks();
+        } catch (error) {
+            message.error('删除失败');
+        }
     };
 
-    const handleToggle = async (id: string, enabled: boolean) => {
-        message.success(enabled ? '已启用' : '已禁用');
-        loadTasks();
+    const handleToggle = async (task: ScheduleTask) => {
+        try {
+            if (task.enabled) {
+                await scheduleAPI.disable(task.id);
+            } else {
+                await scheduleAPI.enable(task.id);
+            }
+            message.success('操作成功');
+            loadTasks();
+        } catch (error) {
+            message.error('操作失败');
+        }
     };
 
-    const handleExecute = async (id: string) => {
-        message.success('任务已执行');
+    const handleExecute = async (taskId: string) => {
+        try {
+            await scheduleAPI.execute(taskId);
+            message.success('任务已执行');
+            loadTasks();
+        } catch (error) {
+            message.error('执行失败');
+        }
     };
 
     const columns: ColumnsType<ScheduleTask> = [
@@ -121,7 +217,7 @@ const ScheduleManagement: React.FC = () => {
                         type="link"
                         icon={record.enabled ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
                         size="small"
-                        onClick={() => handleToggle(record.id, !record.enabled)}
+                        onClick={() => handleToggle(record)}
                     >
                         {record.enabled ? '禁用' : '启用'}
                     </Button>
