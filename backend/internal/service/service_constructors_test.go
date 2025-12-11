@@ -31,7 +31,7 @@ func TestServiceConstructors(t *testing.T) {
 	dashboardComponentRepo := repository.NewDashboardComponentRepository()
 	chartRepo := repository.NewChartRepository()
 	datasetRepo := repository.NewDatasetRepository()
-	datasetFieldRepo := repository.NewDatasetFieldRepository()
+	_ = repository.NewDatasetFieldRepository()
 	datasourceRepo := repository.NewDatasourceRepository()
 	roleRepo := repository.NewRoleRepository()
 	permissionRepo := repository.NewPermissionRepository()
@@ -39,7 +39,7 @@ func TestServiceConstructors(t *testing.T) {
 	operLogRepo := repository.NewOperLogRepository()
 	systemSettingRepo := repository.NewSystemSettingRepository()
 	scheduleRepo := repository.NewScheduleRepository()
-	rowPermissionRepo := repository.NewRowPermissionRepository()
+	_ = repository.NewRowPermissionRepository()
 
 	t.Run("AuthService", func(t *testing.T) {
 		svc := service.NewAuthService(userRepo, "test-secret")
@@ -57,7 +57,11 @@ func TestServiceConstructors(t *testing.T) {
 	})
 
 	t.Run("DatasetService", func(t *testing.T) {
-		calciteClient, _ := engine.NewCalciteClient("http://localhost:8765")
+		cfg := &engine.CalciteConfig{
+			AvaticaURL:   "http://localhost:8765",
+			MaxOpenConns: 10,
+		}
+		calciteClient, _ := engine.NewCalciteClient(cfg, nil)
 		svc := service.NewDatasetService(datasetRepo, calciteClient)
 		assert.NotNil(t, svc)
 	})
@@ -74,7 +78,7 @@ func TestServiceConstructors(t *testing.T) {
 	})
 
 	t.Run("PermissionService", func(t *testing.T) {
-		svc := service.NewPermissionService(permissionRepo, rowPermissionRepo)
+		svc := service.NewPermissionService(permissionRepo, roleRepo)
 		assert.NotNil(t, svc)
 	})
 
@@ -100,11 +104,6 @@ func TestServiceConstructors(t *testing.T) {
 
 	t.Run("DatasetGroupService", func(t *testing.T) {
 		svc := service.NewDatasetGroupService(datasetRepo)
-		assert.NotNil(t, svc)
-	})
-
-	t.Run("DatasetFieldService", func(t *testing.T) {
-		svc := service.NewDatasetFieldService(datasetFieldRepo)
 		assert.NotNil(t, svc)
 	})
 

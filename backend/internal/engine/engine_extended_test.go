@@ -34,7 +34,7 @@ func TestCalciteClient_Constructor(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client, err := engine.NewCalciteClient(tt.avaticaURL)
-			
+
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, client)
@@ -53,7 +53,7 @@ func TestDatasourceConnector_Constructor(t *testing.T) {
 	})
 }
 
-func TestConnection TestResult_Struct(t *testing.T) {
+func TestConnectionTestResult_Struct(t *testing.T) {
 	t.Run("Create ConnectionTestResult", func(t *testing.T) {
 		result := engine.ConnectionTestResult{
 			Success: true,
