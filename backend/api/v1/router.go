@@ -97,6 +97,12 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 			authd.POST("/role/:id/menus", roleHandler.SetRoleMenus)
 			authd.GET("/role/:id/menus", roleHandler.GetRoleMenus)
 			authd.POST("/user/:id/roles", roleHandler.SetUserRoles)
+
+			operLogRepo := repository.NewOperationLogRepository(db)
+			operLogService := service.NewOperationLogService(operLogRepo)
+			operLogHandler := handler.NewOperationLogHandler(operLogService)
+
+			authd.GET("/operation-log", operLogHandler.List)
 		}
 	}
 }

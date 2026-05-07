@@ -13,6 +13,8 @@ import (
 	"go.uber.org/zap"
 
 	"cozy-insight/api/v1"
+	"cozy-insight/internal/middleware"
+	"cozy-insight/internal/repository"
 	"cozy-insight/pkg/config"
 	"cozy-insight/pkg/database"
 	"cozy-insight/pkg/logger"
@@ -33,6 +35,9 @@ func main() {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(logger.GinLogger(log))
+
+	operLogRepo := repository.NewOperationLogRepository(db)
+	r.Use(middleware.OperationLog(operLogRepo))
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
