@@ -60,3 +60,31 @@ func TestBuildSQL_InvalidOperator(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported operator")
 }
+
+func TestBuildSQL_EmptyDimensionsAndMetrics(t *testing.T) {
+	config := ChartQueryConfig{}
+	_, _, err := BuildSQL("orders", config)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "at least one dimension or metric required")
+}
+
+func TestBuildSQL_DefaultMetricAlias(t *testing.T) {
+	config := ChartQueryConfig{
+		Dimensions: []Dimension{{Field: "dept"}},
+		Metrics:    []Metric{{Field: "amount", Aggregation: "SUM"}},
+	}
+	sql, _, err := BuildSQL("orders", config)
+	require.NoError(t, err)
+	assert.Contains(t, sql, "SUM(`amount`) AS `sum_amount`")
+}
+
+func TestBuildSQL_InvalidOrderDirection(t *testing.T) {
+	config := ChartQueryConfig{
+		Dimensions: []Dimension{{Field: "dept"}},
+		Metrics:    []Metric{{Field: "amount", Aggregation: "SUM"}},
+		Orders:     []Order{{Field: "amount", Direction: "invalid"}},
+	}
+	sql, _, err := BuildSQL("orders", config)
+	require.NoError(t, err)
+	assert.Contains(t, sql, "ORDER BY `amount` asc")
+}
