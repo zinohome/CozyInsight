@@ -13,7 +13,7 @@ export default function DatasourcePage() {
     setLoading(true)
     try {
       const res = await datasourceAPI.list()
-      setList(res.data.data)
+      setList(res)
     } catch {
       message.error('获取数据源列表失败')
     } finally {

@@ -16,8 +16,8 @@ export default function ChartPage() {
     setLoading(true)
     try {
       const [dsRes, listRes] = await Promise.all([datasetAPI.list(), chartAPI.list()])
-      setDatasets(dsRes.data.data)
-      setList(listRes.data.data)
+      setDatasets(dsRes)
+      setList(listRes)
     } catch {
       message.error('获取数据失败')
     } finally {

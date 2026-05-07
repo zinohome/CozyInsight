@@ -18,8 +18,8 @@ export default function DatasetPage() {
     setLoading(true)
     try {
       const [dsRes, listRes] = await Promise.all([datasourceAPI.list(), datasetAPI.list()])
-      setDatasources(dsRes.data.data)
-      setList(listRes.data.data)
+      setDatasources(dsRes)
+      setList(listRes)
     } catch {
       message.error('获取数据失败')
     } finally {
@@ -56,7 +56,7 @@ export default function DatasetPage() {
   const handlePreview = async (id: number) => {
     try {
       const res = await datasetAPI.preview(id, 10)
-      setPreviewData(res.data.data)
+      setPreviewData(res)
       setPreviewModal(true)
     } catch {
       message.error('预览失败')

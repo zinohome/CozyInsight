@@ -15,7 +15,7 @@ export default function LoginPage() {
     try {
       setLoading(true)
       const resp = await authAPI.login(values)
-      setToken(resp.data.token)
+      setToken(resp.token)
       message.success('登录成功')
       navigate('/')
     } catch (error) {

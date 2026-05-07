@@ -13,7 +13,7 @@ export default function DashboardPage() {
     setLoading(true)
     try {
       const res = await dashboardAPI.list()
-      setList(res.data.data)
+      setList(res)
     } catch {
       message.error('获取仪表板列表失败')
     } finally {
