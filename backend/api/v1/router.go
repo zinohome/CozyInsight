@@ -5,6 +5,7 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	"cozy-insight/internal/handler"
+	"cozy-insight/internal/middleware"
 	"cozy-insight/internal/repository"
 	"cozy-insight/internal/service"
 	"cozy-insight/pkg/config"
@@ -29,43 +30,47 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 	chartService := service.NewChartService(chartRepo)
 	chartHandler := handler.NewChartHandler(chartService)
 
+	dashboardRepo := repository.NewDashboardRepository(db)
+	dashboardService := service.NewDashboardService(dashboardRepo)
+	dashboardHandler := handler.NewDashboardHandler(dashboardService)
+
 	api := r.Group("/api/v1")
 	{
 		api.POST("/auth/register", authHandler.Register)
 		api.POST("/auth/login", authHandler.Login)
 
-		api.GET("/datasource", dsHandler.List)
-		api.POST("/datasource", dsHandler.Create)
-		api.GET("/datasource/:id", dsHandler.Get)
-		api.PUT("/datasource/:id", dsHandler.Update)
-		api.DELETE("/datasource/:id", dsHandler.Delete)
-		api.POST("/datasource/test", dsHandler.TestConnection)
+		authd := api.Group("/")
+		authd.Use(middleware.JWTAuth(jwtManager))
+		{
+			authd.GET("/datasource", dsHandler.List)
+			authd.POST("/datasource", dsHandler.Create)
+			authd.GET("/datasource/:id", dsHandler.Get)
+			authd.PUT("/datasource/:id", dsHandler.Update)
+			authd.DELETE("/datasource/:id", dsHandler.Delete)
+			authd.POST("/datasource/test", dsHandler.TestConnection)
 
-		api.GET("/dataset", datasetHandler.List)
-		api.POST("/dataset", datasetHandler.Create)
-		api.GET("/dataset/:id", datasetHandler.Get)
-		api.PUT("/dataset/:id", datasetHandler.Update)
-		api.DELETE("/dataset/:id", datasetHandler.Delete)
-		api.POST("/dataset/:id/sync-fields", datasetHandler.SyncFields)
-		api.GET("/dataset/:id/preview", datasetHandler.Preview)
+			authd.GET("/dataset", datasetHandler.List)
+			authd.POST("/dataset", datasetHandler.Create)
+			authd.GET("/dataset/:id", datasetHandler.Get)
+			authd.PUT("/dataset/:id", datasetHandler.Update)
+			authd.DELETE("/dataset/:id", datasetHandler.Delete)
+			authd.POST("/dataset/:id/sync-fields", datasetHandler.SyncFields)
+			authd.GET("/dataset/:id/preview", datasetHandler.Preview)
 
-		api.GET("/chart", chartHandler.List)
-		api.POST("/chart", chartHandler.Create)
-		api.GET("/chart/:id", chartHandler.Get)
-		api.PUT("/chart/:id", chartHandler.Update)
-		api.DELETE("/chart/:id", chartHandler.Delete)
+			authd.GET("/chart", chartHandler.List)
+			authd.POST("/chart", chartHandler.Create)
+			authd.GET("/chart/:id", chartHandler.Get)
+			authd.PUT("/chart/:id", chartHandler.Update)
+			authd.DELETE("/chart/:id", chartHandler.Delete)
 
-		dashboardRepo := repository.NewDashboardRepository(db)
-		dashboardService := service.NewDashboardService(dashboardRepo)
-		dashboardHandler := handler.NewDashboardHandler(dashboardService)
-
-		api.GET("/dashboard", dashboardHandler.List)
-		api.POST("/dashboard", dashboardHandler.Create)
-		api.GET("/dashboard/:id", dashboardHandler.Get)
-		api.PUT("/dashboard/:id", dashboardHandler.Update)
-		api.DELETE("/dashboard/:id", dashboardHandler.Delete)
-		api.POST("/dashboard/:id/charts", dashboardHandler.AddChart)
-		api.GET("/dashboard/:id/charts", dashboardHandler.GetCharts)
-		api.DELETE("/dashboard/:id/charts/:chartId", dashboardHandler.RemoveChart)
+			authd.GET("/dashboard", dashboardHandler.List)
+			authd.POST("/dashboard", dashboardHandler.Create)
+			authd.GET("/dashboard/:id", dashboardHandler.Get)
+			authd.PUT("/dashboard/:id", dashboardHandler.Update)
+			authd.DELETE("/dashboard/:id", dashboardHandler.Delete)
+			authd.POST("/dashboard/:id/charts", dashboardHandler.AddChart)
+			authd.GET("/dashboard/:id/charts", dashboardHandler.GetCharts)
+			authd.DELETE("/dashboard/:id/charts/:chartId", dashboardHandler.RemoveChart)
+		}
 	}
 }

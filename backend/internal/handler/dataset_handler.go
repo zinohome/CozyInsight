@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"cozy-insight/internal/dto"
+	"cozy-insight/internal/middleware"
 	"cozy-insight/internal/service"
 )
 
@@ -25,7 +26,7 @@ func (h *DatasetHandler) Create(c *gin.Context) {
 		return
 	}
 
-	userID := uint64(1)
+	userID := middleware.GetUserID(c)
 
 	ds, err := h.service.Create(c.Request.Context(), &req, userID)
 	if err != nil {
