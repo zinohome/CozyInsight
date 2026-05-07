@@ -83,6 +83,20 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 			authd.DELETE("/user/:id", userHandler.Delete)
 			authd.GET("/user/profile", userHandler.Profile)
 			authd.POST("/user/change-password", userHandler.ChangePassword)
+
+			roleRepo := repository.NewRoleRepository(db)
+			roleService := service.NewRoleService(roleRepo)
+			roleHandler := handler.NewRoleHandler(roleService)
+
+			authd.GET("/role", roleHandler.List)
+			authd.POST("/role", roleHandler.Create)
+			authd.GET("/role/:id", roleHandler.Get)
+			authd.PUT("/role/:id", roleHandler.Update)
+			authd.DELETE("/role/:id", roleHandler.Delete)
+			authd.GET("/role/menus", roleHandler.ListMenus)
+			authd.POST("/role/:id/menus", roleHandler.SetRoleMenus)
+			authd.GET("/role/:id/menus", roleHandler.GetRoleMenus)
+			authd.POST("/user/:id/roles", roleHandler.SetUserRoles)
 		}
 	}
 }
