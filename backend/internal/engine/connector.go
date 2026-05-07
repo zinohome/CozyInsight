@@ -68,6 +68,10 @@ func (c *mysqlConnector) Connect(configJSON string) error {
 	if err != nil {
 		return fmt.Errorf("open mysql failed: %w", err)
 	}
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return fmt.Errorf("ping mysql failed: %w", err)
+	}
 	c.db = db
 	return nil
 }
@@ -111,7 +115,7 @@ func (c *mysqlConnector) GetColumns(ctx context.Context, dbName, tableName strin
 		var col ColumnInfo
 		var maxLen, prec, scale sql.NullInt64
 		if err := rows.Scan(&col.Name, &col.Type, &maxLen, &prec, &scale); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("scan column info failed: %w", err)
 		}
 		if maxLen.Valid {
 			col.Length = int(maxLen.Int64)
@@ -154,6 +158,10 @@ func (c *postgresqlConnector) Connect(configJSON string) error {
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return fmt.Errorf("open postgresql failed: %w", err)
+	}
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return fmt.Errorf("ping postgresql failed: %w", err)
 	}
 	c.db = db
 	return nil
@@ -198,7 +206,7 @@ func (c *postgresqlConnector) GetColumns(ctx context.Context, dbName, tableName 
 		var col ColumnInfo
 		var maxLen, prec, scale sql.NullInt64
 		if err := rows.Scan(&col.Name, &col.Type, &maxLen, &prec, &scale); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("scan column info failed: %w", err)
 		}
 		if maxLen.Valid {
 			col.Length = int(maxLen.Int64)
@@ -217,12 +225,15 @@ func (c *postgresqlConnector) GetColumns(ctx context.Context, dbName, tableName 
 func scanRows(rows *sql.Rows) ([]map[string]interface{}, error) {
 	columns, err := rows.Columns()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get columns failed: %w", err)
 	}
 	columnTypes, err := rows.ColumnTypes()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get column types failed: %w", err)
 	}
+
+	// Guard: if lengths mismatch, skip type-based conversion
+	typesAvailable := len(columnTypes) == len(columns)
 
 	var result []map[string]interface{}
 	for rows.Next() {
@@ -232,21 +243,25 @@ func scanRows(rows *sql.Rows) ([]map[string]interface{}, error) {
 			valuePtrs[i] = &values[i]
 		}
 		if err := rows.Scan(valuePtrs...); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("scan row failed: %w", err)
 		}
 
 		row := make(map[string]interface{}, len(columns))
 		for i, col := range columns {
 			val := values[i]
 			if b, ok := val.([]byte); ok {
+				if !typesAvailable || i >= len(columnTypes) {
+					row[col] = string(b)
+					continue
+				}
 				switch columnTypes[i].DatabaseTypeName() {
-				case "INT", "BIGINT", "SMALLINT", "TINYINT", "INTEGER":
+				case "INT", "BIGINT", "SMALLINT", "TINYINT", "INTEGER", "INT4", "INT8":
 					if n, err := strconv.ParseInt(string(b), 10, 64); err == nil {
 						row[col] = n
 					} else {
 						row[col] = string(b)
 					}
-				case "FLOAT", "DOUBLE", "DECIMAL", "NUMERIC", "REAL":
+				case "FLOAT", "DOUBLE", "DECIMAL", "NUMERIC", "REAL", "FLOAT4", "FLOAT8":
 					if n, err := strconv.ParseFloat(string(b), 64); err == nil {
 						row[col] = n
 					} else {
