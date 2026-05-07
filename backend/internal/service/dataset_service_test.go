@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -206,4 +207,34 @@ func TestDatasetService_buildRowFilter(t *testing.T) {
 	assert.Equal(t, "dept_id", conditions[0].FieldName)
 	assert.Equal(t, "=", conditions[0].Operator)
 	assert.Equal(t, "5", conditions[0].Value)
+}
+
+func TestDatasetService_getTableColumns_ConnectorError(t *testing.T) {
+	db, _ := testutil.NewMockDB(t)
+	repo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	svc := NewDatasetService(repo, dsRepo, nil)
+
+	svc.newConnector = func(string) (engine.DatasourceConnector, error) {
+		return nil, fmt.Errorf("unsupported type")
+	}
+
+	_, err := svc.getTableColumns(context.Background(), &model.Datasource{Type: "oracle", Config: "{}"}, "db", "users")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "create connector failed")
+}
+
+func TestDatasetService_queryTableData_ConnectorError(t *testing.T) {
+	db, _ := testutil.NewMockDB(t)
+	repo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	svc := NewDatasetService(repo, dsRepo, nil)
+
+	svc.newConnector = func(string) (engine.DatasourceConnector, error) {
+		return nil, fmt.Errorf("unsupported type")
+	}
+
+	_, err := svc.queryTableData(context.Background(), &model.Datasource{Type: "oracle", Config: "{}"}, "db", "users", 10)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "create connector failed")
 }

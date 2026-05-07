@@ -188,7 +188,7 @@ type columnInfo struct {
 func (s *DatasetService) getTableColumns(ctx context.Context, ds *model.Datasource, dbName, tableName string) ([]columnInfo, error) {
 	conn, err := s.newConnector(ds.Type)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create connector failed: %w", err)
 	}
 	defer conn.Close()
 	if err := conn.Connect(ds.Config); err != nil {
@@ -214,13 +214,19 @@ func (s *DatasetService) getTableColumns(ctx context.Context, ds *model.Datasour
 func (s *DatasetService) queryTableData(ctx context.Context, ds *model.Datasource, dbName, tableName string, limit uint64) ([]map[string]interface{}, error) {
 	conn, err := s.newConnector(ds.Type)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create connector failed: %w", err)
 	}
 	defer conn.Close()
 	if err := conn.Connect(ds.Config); err != nil {
 		return nil, fmt.Errorf("connect failed: %w", err)
 	}
-	query := fmt.Sprintf("SELECT * FROM %s LIMIT %d", quoteIdentifier(tableName), limit)
+	var tableRef string
+	if dbName != "" {
+		tableRef = fmt.Sprintf("%s.%s", engine.QuoteIdentifier(dbName), engine.QuoteIdentifier(tableName))
+	} else {
+		tableRef = engine.QuoteIdentifier(tableName)
+	}
+	query := fmt.Sprintf("SELECT * FROM %s LIMIT %d", tableRef, limit)
 	return conn.Query(ctx, query)
 }
 
@@ -243,6 +249,3 @@ func (s *DatasetService) buildRowFilter(ctx context.Context, datasetID uint64, u
 	return svc.BuildRowFilter(ctx, datasetID, userAttrs)
 }
 
-func quoteIdentifier(name string) string {
-	return "`" + strings.ReplaceAll(name, "`", "``") + "`"
-}

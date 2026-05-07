@@ -67,8 +67,8 @@ func BuildSQL(tableName string, config ChartQueryConfig) (string, []interface{},
 	var groupByCols []string
 
 	for _, d := range config.Dimensions {
-		selectCols = append(selectCols, quoteIdentifier(d.Field))
-		groupByCols = append(groupByCols, quoteIdentifier(d.Field))
+		selectCols = append(selectCols, QuoteIdentifier(d.Field))
+		groupByCols = append(groupByCols, QuoteIdentifier(d.Field))
 	}
 
 	for _, m := range config.Metrics {
@@ -81,7 +81,7 @@ func BuildSQL(tableName string, config ChartQueryConfig) (string, []interface{},
 			alias = fmt.Sprintf("%s_%s", strings.ToLower(agg), m.Field)
 		}
 		selectCols = append(selectCols,
-			fmt.Sprintf("%s(%s) AS %s", agg, quoteIdentifier(m.Field), quoteIdentifier(alias)))
+			fmt.Sprintf("%s(%s) AS %s", agg, QuoteIdentifier(m.Field), QuoteIdentifier(alias)))
 	}
 
 	// Validate filters early so that invalid operators are caught before
@@ -94,7 +94,7 @@ func BuildSQL(tableName string, config ChartQueryConfig) (string, []interface{},
 			return "", nil, fmt.Errorf("unsupported operator: %s", f.Operator)
 		}
 		conditions = append(conditions,
-			fmt.Sprintf("%s %s ?", quoteIdentifier(f.Field), op))
+			fmt.Sprintf("%s %s ?", QuoteIdentifier(f.Field), op))
 		args = append(args, f.Value)
 	}
 
@@ -104,7 +104,7 @@ func BuildSQL(tableName string, config ChartQueryConfig) (string, []interface{},
 
 	query := fmt.Sprintf("SELECT %s FROM %s",
 		strings.Join(selectCols, ", "),
-		quoteIdentifier(tableName))
+		QuoteIdentifier(tableName))
 
 	if len(conditions) > 0 {
 		query += " WHERE " + strings.Join(conditions, " AND ")
@@ -122,7 +122,7 @@ func BuildSQL(tableName string, config ChartQueryConfig) (string, []interface{},
 				dir = "asc"
 			}
 			orderParts = append(orderParts,
-				fmt.Sprintf("%s %s", quoteIdentifier(o.Field), dir))
+				fmt.Sprintf("%s %s", QuoteIdentifier(o.Field), dir))
 		}
 		query += " ORDER BY " + strings.Join(orderParts, ", ")
 	}
@@ -134,7 +134,7 @@ func BuildSQL(tableName string, config ChartQueryConfig) (string, []interface{},
 	return query, args, nil
 }
 
-// quoteIdentifier wraps a name in backticks to avoid SQL injection from field names.
-func quoteIdentifier(name string) string {
+// QuoteIdentifier wraps a name in backticks to avoid SQL injection from field names.
+func QuoteIdentifier(name string) string {
 	return "`" + strings.ReplaceAll(name, "`", "``") + "`"
 }
