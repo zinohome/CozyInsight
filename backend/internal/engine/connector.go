@@ -15,7 +15,7 @@ import (
 type DatasourceConnector interface {
 	Connect(configJSON string) error
 	Close() error
-	Query(ctx context.Context, sql string, args ...interface{}) ([]map[string]interface{}, error)
+	Query(ctx context.Context, query string, args ...interface{}) ([]map[string]interface{}, error)
 	GetColumns(ctx context.Context, dbName, tableName string) ([]ColumnInfo, error)
 }
 
@@ -49,11 +49,23 @@ func (c *mysqlConnector) buildDSN(configJSON string) (string, error) {
 	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
 		return "", fmt.Errorf("invalid config json: %w", err)
 	}
-	host, _ := cfg["host"].(string)
-	portF, _ := cfg["port"].(float64)
-	username, _ := cfg["username"].(string)
+	host, ok := cfg["host"].(string)
+	if !ok || host == "" {
+		return "", fmt.Errorf("missing or invalid required field: host")
+	}
+	portF, ok := cfg["port"].(float64)
+	if !ok || portF <= 0 {
+		return "", fmt.Errorf("missing or invalid required field: port")
+	}
+	username, ok := cfg["username"].(string)
+	if !ok || username == "" {
+		return "", fmt.Errorf("missing or invalid required field: username")
+	}
 	password, _ := cfg["password"].(string)
-	database, _ := cfg["database"].(string)
+	database, ok := cfg["database"].(string)
+	if !ok || database == "" {
+		return "", fmt.Errorf("missing or invalid required field: database")
+	}
 	port := int(portF)
 	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=true",
 		username, password, host, port, database), nil
@@ -83,11 +95,11 @@ func (c *mysqlConnector) Close() error {
 	return nil
 }
 
-func (c *mysqlConnector) Query(ctx context.Context, sql string, args ...interface{}) ([]map[string]interface{}, error) {
+func (c *mysqlConnector) Query(ctx context.Context, query string, args ...interface{}) ([]map[string]interface{}, error) {
 	if c.db == nil {
 		return nil, fmt.Errorf("not connected")
 	}
-	rows, err := c.db.QueryContext(ctx, sql, args...)
+	rows, err := c.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query failed: %w", err)
 	}
@@ -128,7 +140,10 @@ func (c *mysqlConnector) GetColumns(ctx context.Context, dbName, tableName strin
 		}
 		cols = append(cols, col)
 	}
-	return cols, fmt.Errorf("row iteration failed: %w", rows.Err())
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("row iteration failed: %w", err)
+	}
+	return cols, nil
 }
 
 type postgresqlConnector struct {
@@ -140,14 +155,30 @@ func (c *postgresqlConnector) buildDSN(configJSON string) (string, error) {
 	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
 		return "", fmt.Errorf("invalid config json: %w", err)
 	}
-	host, _ := cfg["host"].(string)
-	portF, _ := cfg["port"].(float64)
-	username, _ := cfg["username"].(string)
+	host, ok := cfg["host"].(string)
+	if !ok || host == "" {
+		return "", fmt.Errorf("missing or invalid required field: host")
+	}
+	portF, ok := cfg["port"].(float64)
+	if !ok || portF <= 0 {
+		return "", fmt.Errorf("missing or invalid required field: port")
+	}
+	username, ok := cfg["username"].(string)
+	if !ok || username == "" {
+		return "", fmt.Errorf("missing or invalid required field: username")
+	}
 	password, _ := cfg["password"].(string)
-	database, _ := cfg["database"].(string)
+	database, ok := cfg["database"].(string)
+	if !ok || database == "" {
+		return "", fmt.Errorf("missing or invalid required field: database")
+	}
+	sslmode, _ := cfg["sslmode"].(string)
+	if sslmode == "" {
+		sslmode = "prefer"
+	}
 	port := int(portF)
-	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
-		host, port, username, password, database), nil
+	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		host, port, username, password, database, sslmode), nil
 }
 
 func (c *postgresqlConnector) Connect(configJSON string) error {
@@ -174,11 +205,11 @@ func (c *postgresqlConnector) Close() error {
 	return nil
 }
 
-func (c *postgresqlConnector) Query(ctx context.Context, sql string, args ...interface{}) ([]map[string]interface{}, error) {
+func (c *postgresqlConnector) Query(ctx context.Context, query string, args ...interface{}) ([]map[string]interface{}, error) {
 	if c.db == nil {
 		return nil, fmt.Errorf("not connected")
 	}
-	rows, err := c.db.QueryContext(ctx, sql, args...)
+	rows, err := c.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query failed: %w", err)
 	}
@@ -219,7 +250,10 @@ func (c *postgresqlConnector) GetColumns(ctx context.Context, dbName, tableName 
 		}
 		cols = append(cols, col)
 	}
-	return cols, fmt.Errorf("row iteration failed: %w", rows.Err())
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("row iteration failed: %w", err)
+	}
+	return cols, nil
 }
 
 func scanRows(rows *sql.Rows) ([]map[string]interface{}, error) {
@@ -276,5 +310,8 @@ func scanRows(rows *sql.Rows) ([]map[string]interface{}, error) {
 		}
 		result = append(result, row)
 	}
-	return result, fmt.Errorf("row iteration failed: %w", rows.Err())
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("row iteration failed: %w", err)
+	}
+	return result, nil
 }
