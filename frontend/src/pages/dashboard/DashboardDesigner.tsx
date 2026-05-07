@@ -1,0 +1,165 @@
+import { useState, useEffect, useCallback } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { Button, message, Modal, Select, Space } from 'antd'
+import { Responsive, WidthProvider } from 'react-grid-layout'
+import { dashboardAPI } from '@/api/dashboard'
+import { chartAPI } from '@/api/chart'
+import ChartRenderer from '@/components/ChartRenderer'
+import type { Dashboard } from '@/types/dashboard'
+import type { Chart, ChartDataResponse } from '@/types/chart'
+import 'react-grid-layout/css/styles.css'
+import 'react-resizable/css/styles.css'
+
+const ResponsiveGridLayout = WidthProvider(Responsive)
+
+interface LayoutItem {
+  i: string
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+interface DashboardChartItem {
+  chartId: number
+  layout: LayoutItem
+  data?: ChartDataResponse
+  chart?: Chart
+}
+
+export default function DashboardDesigner() {
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const [dashboard, setDashboard] = useState<Dashboard | null>(null)
+  const [items, setItems] = useState<DashboardChartItem[]>([])
+  const [charts, setCharts] = useState<Chart[]>([])
+  const [addModalOpen, setAddModalOpen] = useState(false)
+  const [selectedChartId, setSelectedChartId] = useState<number | null>(null)
+
+  const fetchDashboard = useCallback(async () => {
+    if (!id) return
+    try {
+      const d = await dashboardAPI.get(Number(id))
+      setDashboard(d)
+      if (d.config) {
+        const cfg = JSON.parse(d.config)
+        if (cfg.items && Array.isArray(cfg.items)) {
+          setItems(cfg.items)
+        }
+      }
+      const allCharts = await chartAPI.list()
+      setCharts(allCharts)
+    } catch {
+      message.error('加载仪表板失败')
+    }
+  }, [id])
+
+  useEffect(() => {
+    fetchDashboard()
+  }, [fetchDashboard])
+
+  const handleLayoutChange = (layout: LayoutItem[]) => {
+    setItems(prev => prev.map(item => {
+      const l = layout.find(x => x.i === String(item.chartId))
+      if (l) {
+        return { ...item, layout: { i: l.i, x: l.x, y: l.y, w: l.w, h: l.h } }
+      }
+      return item
+    }))
+  }
+
+  const handleAddChart = async () => {
+    if (!selectedChartId) return
+    const chart = charts.find(c => c.id === selectedChartId)
+    if (!chart) return
+
+    let data: ChartDataResponse | undefined
+    try {
+      data = await chartAPI.getData(selectedChartId)
+    } catch {
+      message.warning('图表数据加载失败，将只显示占位')
+    }
+
+    const newItem: DashboardChartItem = {
+      chartId: selectedChartId,
+      layout: { i: String(selectedChartId), x: 0, y: 0, w: 6, h: 8 },
+      chart,
+      data,
+    }
+    setItems(prev => [...prev, newItem])
+    setAddModalOpen(false)
+    setSelectedChartId(null)
+  }
+
+  const handleRemoveChart = (chartId: number) => {
+    setItems(prev => prev.filter(i => i.chartId !== chartId))
+  }
+
+  const handleSave = async () => {
+    if (!dashboard) return
+    const config = JSON.stringify({ items: items.map(({ chartId, layout }) => ({ chartId, layout })) })
+    try {
+      await dashboardAPI.update(dashboard.id, { config })
+      message.success('保存成功')
+    } catch {
+      message.error('保存失败')
+    }
+  }
+
+  return (
+    <div style={{ height: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: '8px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h3 style={{ margin: 0 }}>{dashboard?.title || '仪表板设计器'}</h3>
+        <Space>
+          <Button onClick={() => setAddModalOpen(true)}>添加图表</Button>
+          <Button type="primary" onClick={handleSave}>保存</Button>
+          <Button onClick={() => navigate('/dashboard')}>返回</Button>
+        </Space>
+      </div>
+      <div style={{ flex: 1, padding: 16, overflow: 'auto', background: '#f5f5f5' }}>
+        <ResponsiveGridLayout
+          className="layout"
+          layouts={{ lg: items.map(i => i.layout) }}
+          breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
+          cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
+          rowHeight={30}
+          onLayoutChange={handleLayoutChange}
+          isDraggable
+          isResizable
+        >
+          {items.map(item => (
+            <div key={item.chartId} style={{ background: '#fff', borderRadius: 4, boxShadow: '0 1px 4px rgba(0,0,0,0.1)' }}>
+              <div style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontWeight: 'bold' }}>{item.chart?.title || '图表'}</span>
+                <Button type="text" size="small" danger onClick={() => handleRemoveChart(item.chartId)}>移除</Button>
+              </div>
+              <div style={{ padding: 8, height: 'calc(100% - 40px)' }}>
+                {item.data ? (
+                  <ChartRenderer
+                    type={item.chart?.type || 'bar'}
+                    data={item.data.data}
+                    config={{ dimensions: item.data.dimensions, metrics: item.data.metrics }}
+                    height={item.layout.h * 30 - 60}
+                  />
+                ) : (
+                  <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
+                    数据加载失败
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </ResponsiveGridLayout>
+      </div>
+
+      <Modal title="添加图表" open={addModalOpen} onOk={handleAddChart} onCancel={() => setAddModalOpen(false)}>
+        <Select
+          style={{ width: '100%' }}
+          placeholder="选择图表"
+          options={charts.map(c => ({ value: c.id, label: c.title }))}
+          onChange={v => setSelectedChartId(v)}
+        />
+      </Modal>
+    </div>
+  )
+}

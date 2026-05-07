@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Table, Button, Space, Tag, Modal, Form, Input, message } from 'antd'
 import { dashboardAPI } from '@/api/dashboard'
 import type { Dashboard } from '@/types/dashboard'
 
 export default function DashboardPage() {
+  const navigate = useNavigate()
   const [list, setList] = useState<Dashboard[]>([])
   const [loading, setLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
@@ -55,6 +57,7 @@ export default function DashboardPage() {
       title: '操作',
       render: (_: unknown, record: Dashboard) => (
         <Space>
+          <Button type="link" onClick={() => navigate(`/dashboard/designer/${record.id}`)}>设计</Button>
           <Button type="link" danger onClick={() => handleDelete(record.id)}>删除</Button>
         </Space>
       ),
