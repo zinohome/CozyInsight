@@ -2,7 +2,6 @@ package handler
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -35,7 +34,10 @@ func (h *RoleHandler) Create(c *gin.Context) {
 }
 
 func (h *RoleHandler) Get(c *gin.Context) {
-	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
 	role, err := h.service.GetByID(c.Request.Context(), id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"code": 404, "error": err.Error()})
@@ -56,7 +58,10 @@ func (h *RoleHandler) List(c *gin.Context) {
 }
 
 func (h *RoleHandler) Update(c *gin.Context) {
-	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
 	var req dto.UpdateRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "error": err.Error()})
@@ -72,7 +77,10 @@ func (h *RoleHandler) Update(c *gin.Context) {
 }
 
 func (h *RoleHandler) Delete(c *gin.Context) {
-	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
 	if err := h.service.Delete(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "error": err.Error()})
 		return
@@ -92,7 +100,10 @@ func (h *RoleHandler) ListMenus(c *gin.Context) {
 }
 
 func (h *RoleHandler) SetRoleMenus(c *gin.Context) {
-	roleID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	roleID, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
 	var req dto.SetRoleMenusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "error": err.Error()})
@@ -108,7 +119,10 @@ func (h *RoleHandler) SetRoleMenus(c *gin.Context) {
 }
 
 func (h *RoleHandler) GetRoleMenus(c *gin.Context) {
-	roleID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	roleID, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
 	ids, err := h.service.GetRoleMenus(c.Request.Context(), roleID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "error": err.Error()})
@@ -119,7 +133,10 @@ func (h *RoleHandler) GetRoleMenus(c *gin.Context) {
 }
 
 func (h *RoleHandler) SetUserRoles(c *gin.Context) {
-	userID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	userID, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
 	var req dto.SetUserRolesRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "error": err.Error()})

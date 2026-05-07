@@ -10,9 +10,9 @@ type CreateChartRequest struct {
 
 // UpdateChartRequest 更新图表请求
 type UpdateChartRequest struct {
-	Title     string `json:"title"`
-	Type      string `json:"type"`
-	DatasetID uint64 `json:"datasetId"`
-	Config    string `json:"config"`
-	Status    int8   `json:"status"`
+	Title     string  `json:"title"`
+	Type      string  `json:"type"`
+	DatasetID *uint64 `json:"datasetId"`
+	Config    string  `json:"config"`
+	Status    *int8   `json:"status"`
 }

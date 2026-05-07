@@ -60,7 +60,9 @@ func (s *DashboardService) Update(ctx context.Context, id uint64, req *dto.Updat
 	if req.Config != "" {
 		d.Config = req.Config
 	}
-	d.Status = req.Status
+	if req.Status != nil {
+		d.Status = *req.Status
+	}
 
 	return s.repo.Update(ctx, d)
 }

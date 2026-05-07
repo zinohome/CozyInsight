@@ -2,7 +2,6 @@ package handler
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -38,7 +37,10 @@ func (h *ChartHandler) Create(c *gin.Context) {
 }
 
 func (h *ChartHandler) Get(c *gin.Context) {
-	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
 	chart, err := h.service.GetByID(c.Request.Context(), id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"code": 404, "error": err.Error()})
@@ -59,7 +61,10 @@ func (h *ChartHandler) List(c *gin.Context) {
 }
 
 func (h *ChartHandler) Update(c *gin.Context) {
-	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
 	var req dto.UpdateChartRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "error": err.Error()})
@@ -75,7 +80,10 @@ func (h *ChartHandler) Update(c *gin.Context) {
 }
 
 func (h *ChartHandler) Delete(c *gin.Context) {
-	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
 	if err := h.service.Delete(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "error": err.Error()})
 		return

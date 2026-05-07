@@ -16,8 +16,8 @@ type UpdateUserRequest struct {
 	Email    string `json:"email"`
 	NickName string `json:"nickName"`
 	Phone    string `json:"phone"`
-	Status   int8   `json:"status"`
-	IsAdmin  bool   `json:"isAdmin"`
+	Status   *int8  `json:"status"`
+	IsAdmin  *bool  `json:"isAdmin"`
 }
 
 // ChangePasswordRequest 修改密码请求

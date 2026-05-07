@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"time"
 
@@ -73,6 +74,6 @@ func OperationLog(repo *repository.OperationLogRepository) gin.HandlerFunc {
 			log.ErrorMessage = c.Errors.Last().Error()
 		}
 
-		go repo.Create(c.Request.Context(), log)
+		go repo.Create(context.Background(), log)
 	}
 }

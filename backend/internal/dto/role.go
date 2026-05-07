@@ -13,7 +13,7 @@ type UpdateRoleRequest struct {
 	Name        string `json:"name"`
 	Code        string `json:"code"`
 	Description string `json:"description"`
-	Status      int8   `json:"status"`
+	Status      *int8  `json:"status"`
 }
 
 // SetRoleMenusRequest 设置角色菜单请求

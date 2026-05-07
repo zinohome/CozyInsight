@@ -12,7 +12,7 @@ type UpdateDatasourceRequest struct {
 	Name   string `json:"name"`
 	Type   string `json:"type"`
 	Config string `json:"config"`
-	Status int8   `json:"status"`
+	Status *int8  `json:"status"`
 }
 
 // DatasourceResponse 数据源响应

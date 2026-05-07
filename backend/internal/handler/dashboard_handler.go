@@ -2,7 +2,6 @@ package handler
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -38,7 +37,10 @@ func (h *DashboardHandler) Create(c *gin.Context) {
 }
 
 func (h *DashboardHandler) Get(c *gin.Context) {
-	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
 	d, err := h.service.GetByID(c.Request.Context(), id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"code": 404, "error": err.Error()})
@@ -59,7 +61,10 @@ func (h *DashboardHandler) List(c *gin.Context) {
 }
 
 func (h *DashboardHandler) Update(c *gin.Context) {
-	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
 	var req dto.UpdateDashboardRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "error": err.Error()})
@@ -75,7 +80,10 @@ func (h *DashboardHandler) Update(c *gin.Context) {
 }
 
 func (h *DashboardHandler) Delete(c *gin.Context) {
-	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
 	if err := h.service.Delete(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "error": err.Error()})
 		return
@@ -85,7 +93,10 @@ func (h *DashboardHandler) Delete(c *gin.Context) {
 }
 
 func (h *DashboardHandler) AddChart(c *gin.Context) {
-	dashboardID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	dashboardID, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
 	var req dto.AddChartToDashboardRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "error": err.Error()})
@@ -101,7 +112,10 @@ func (h *DashboardHandler) AddChart(c *gin.Context) {
 }
 
 func (h *DashboardHandler) GetCharts(c *gin.Context) {
-	dashboardID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	dashboardID, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
 	list, err := h.service.GetCharts(c.Request.Context(), dashboardID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "error": err.Error()})
@@ -112,8 +126,14 @@ func (h *DashboardHandler) GetCharts(c *gin.Context) {
 }
 
 func (h *DashboardHandler) RemoveChart(c *gin.Context) {
-	dashboardID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	chartID, _ := strconv.ParseUint(c.Param("chartId"), 10, 64)
+	dashboardID, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
+	chartID, ok := parseUintParam(c, "chartId")
+	if !ok {
+		return
+	}
 	if err := h.service.RemoveChart(c.Request.Context(), dashboardID, chartID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "error": err.Error()})
 		return

@@ -55,8 +55,8 @@ func (s *DatasetService) Update(ctx context.Context, id uint64, req *dto.UpdateD
 	if req.Name != "" {
 		ds.Name = req.Name
 	}
-	if req.DatasourceID != 0 {
-		ds.DatasourceID = req.DatasourceID
+	if req.DatasourceID != nil {
+		ds.DatasourceID = *req.DatasourceID
 	}
 	if req.DatabaseName != "" {
 		ds.DatabaseName = req.DatabaseName
@@ -67,8 +67,12 @@ func (s *DatasetService) Update(ctx context.Context, id uint64, req *dto.UpdateD
 	if req.Type != "" {
 		ds.Type = req.Type
 	}
-	ds.Mode = req.Mode
-	ds.Status = req.Status
+	if req.Mode != nil {
+		ds.Mode = *req.Mode
+	}
+	if req.Status != nil {
+		ds.Status = *req.Status
+	}
 
 	return s.repo.Update(ctx, ds)
 }

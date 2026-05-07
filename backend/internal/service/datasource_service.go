@@ -66,7 +66,9 @@ func (s *DatasourceService) Update(ctx context.Context, id uint64, req *dto.Upda
 	if req.Config != "" {
 		ds.Config = req.Config
 	}
-	ds.Status = req.Status
+	if req.Status != nil {
+		ds.Status = *req.Status
+	}
 
 	return s.repo.Update(ctx, ds)
 }

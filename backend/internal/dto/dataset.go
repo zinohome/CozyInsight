@@ -12,13 +12,13 @@ type CreateDatasetRequest struct {
 
 // UpdateDatasetRequest 更新数据集请求
 type UpdateDatasetRequest struct {
-	Name         string `json:"name"`
-	DatasourceID uint64 `json:"datasourceId"`
-	DatabaseName string `json:"databaseName"`
-	TableName    string `json:"tableName"`
-	Type         string `json:"type"`
-	Mode         int8   `json:"mode"`
-	Status       int8   `json:"status"`
+	Name         string  `json:"name"`
+	DatasourceID *uint64 `json:"datasourceId"`
+	DatabaseName string  `json:"databaseName"`
+	TableName    string  `json:"tableName"`
+	Type         string  `json:"type"`
+	Mode         *int8   `json:"mode"`
+	Status       *int8   `json:"status"`
 }
 
 // DatasetFieldResponse 字段响应

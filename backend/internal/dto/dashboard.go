@@ -10,7 +10,7 @@ type CreateDashboardRequest struct {
 type UpdateDashboardRequest struct {
 	Title  string `json:"title"`
 	Config string `json:"config"`
-	Status int8   `json:"status"`
+	Status *int8  `json:"status"`
 }
 
 // AddChartToDashboardRequest 添加图表到仪表板请求

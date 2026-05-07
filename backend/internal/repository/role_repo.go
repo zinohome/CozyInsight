@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/jmoiron/sqlx"
 
@@ -75,10 +76,18 @@ func (r *RoleRepository) SetRoleMenus(ctx context.Context, roleID uint64, menuID
 	if _, err := r.db.ExecContext(ctx, `DELETE FROM role_menus WHERE role_id = ?`, roleID); err != nil {
 		return fmt.Errorf("clear role menus failed: %w", err)
 	}
-	for _, menuID := range menuIDs {
-		if _, err := r.db.ExecContext(ctx, `INSERT INTO role_menus (role_id, menu_id) VALUES (?, ?)`, roleID, menuID); err != nil {
-			return fmt.Errorf("add role menu failed: %w", err)
-		}
+	if len(menuIDs) == 0 {
+		return nil
+	}
+	placeholders := make([]string, len(menuIDs))
+	args := make([]interface{}, 0, len(menuIDs)*2)
+	for i, menuID := range menuIDs {
+		placeholders[i] = "(?, ?)"
+		args = append(args, roleID, menuID)
+	}
+	query := "INSERT INTO role_menus (role_id, menu_id) VALUES " + strings.Join(placeholders, ", ")
+	if _, err := r.db.ExecContext(ctx, query, args...); err != nil {
+		return fmt.Errorf("add role menus failed: %w", err)
 	}
 	return nil
 }
@@ -96,10 +105,18 @@ func (r *RoleRepository) SetUserRoles(ctx context.Context, userID uint64, roleID
 	if _, err := r.db.ExecContext(ctx, `DELETE FROM user_roles WHERE user_id = ?`, userID); err != nil {
 		return fmt.Errorf("clear user roles failed: %w", err)
 	}
-	for _, roleID := range roleIDs {
-		if _, err := r.db.ExecContext(ctx, `INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)`, userID, roleID); err != nil {
-			return fmt.Errorf("add user role failed: %w", err)
-		}
+	if len(roleIDs) == 0 {
+		return nil
+	}
+	placeholders := make([]string, len(roleIDs))
+	args := make([]interface{}, 0, len(roleIDs)*2)
+	for i, roleID := range roleIDs {
+		placeholders[i] = "(?, ?)"
+		args = append(args, userID, roleID)
+	}
+	query := "INSERT INTO user_roles (user_id, role_id) VALUES " + strings.Join(placeholders, ", ")
+	if _, err := r.db.ExecContext(ctx, query, args...); err != nil {
+		return fmt.Errorf("add user roles failed: %w", err)
 	}
 	return nil
 }

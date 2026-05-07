@@ -74,11 +74,15 @@ func (s *UserService) Update(ctx context.Context, id uint64, req *dto.UpdateUser
 	if req.Phone != "" {
 		user.Phone = req.Phone
 	}
-	user.Status = req.Status
-	if req.IsAdmin {
-		user.IsAdmin = 1
-	} else {
-		user.IsAdmin = 0
+	if req.Status != nil {
+		user.Status = *req.Status
+	}
+	if req.IsAdmin != nil {
+		if *req.IsAdmin {
+			user.IsAdmin = 1
+		} else {
+			user.IsAdmin = 0
+		}
 	}
 
 	return s.repo.Update(ctx, user)

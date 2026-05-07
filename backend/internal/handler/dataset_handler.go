@@ -2,7 +2,6 @@ package handler
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -38,7 +37,10 @@ func (h *DatasetHandler) Create(c *gin.Context) {
 }
 
 func (h *DatasetHandler) Get(c *gin.Context) {
-	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
 	ds, err := h.service.GetByID(c.Request.Context(), id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"code": 404, "error": err.Error()})
@@ -59,7 +61,10 @@ func (h *DatasetHandler) List(c *gin.Context) {
 }
 
 func (h *DatasetHandler) Update(c *gin.Context) {
-	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
 	var req dto.UpdateDatasetRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "error": err.Error()})
@@ -75,7 +80,10 @@ func (h *DatasetHandler) Update(c *gin.Context) {
 }
 
 func (h *DatasetHandler) Delete(c *gin.Context) {
-	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
 	if err := h.service.Delete(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "error": err.Error()})
 		return
@@ -85,7 +93,10 @@ func (h *DatasetHandler) Delete(c *gin.Context) {
 }
 
 func (h *DatasetHandler) SyncFields(c *gin.Context) {
-	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
 	if err := h.service.SyncFields(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "error": err.Error()})
 		return
@@ -95,10 +106,13 @@ func (h *DatasetHandler) SyncFields(c *gin.Context) {
 }
 
 func (h *DatasetHandler) Preview(c *gin.Context) {
-	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	limit, _ := strconv.ParseUint(c.Query("limit"), 10, 64)
-	if limit == 0 {
-		limit = 100
+	id, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
+	limit, ok := parseUintQuery(c, "limit", 100)
+	if !ok {
+		return
 	}
 
 	resp, err := h.service.PreviewData(c.Request.Context(), id, limit)

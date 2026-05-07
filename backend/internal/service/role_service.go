@@ -52,7 +52,9 @@ func (s *RoleService) Update(ctx context.Context, id uint64, req *dto.UpdateRole
 		role.Code = req.Code
 	}
 	role.Description = req.Description
-	role.Status = req.Status
+	if req.Status != nil {
+		role.Status = *req.Status
+	}
 	return s.repo.Update(ctx, role)
 }
 

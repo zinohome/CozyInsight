@@ -82,33 +82,38 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 			userService := service.NewUserService(userRepo)
 			userHandler := handler.NewUserHandler(userService)
 
-			authd.GET("/user", userHandler.List)
-			authd.POST("/user", userHandler.Create)
-			authd.GET("/user/:id", userHandler.Get)
-			authd.PUT("/user/:id", userHandler.Update)
-			authd.DELETE("/user/:id", userHandler.Delete)
 			authd.GET("/user/profile", userHandler.Profile)
 			authd.POST("/user/change-password", userHandler.ChangePassword)
 
-			roleRepo := repository.NewRoleRepository(db)
-			roleService := service.NewRoleService(roleRepo)
-			roleHandler := handler.NewRoleHandler(roleService)
+			admin := authd.Group("/")
+			admin.Use(middleware.AdminRequired())
+			{
+				admin.GET("/user", userHandler.List)
+				admin.POST("/user", userHandler.Create)
+				admin.GET("/user/:id", userHandler.Get)
+				admin.PUT("/user/:id", userHandler.Update)
+				admin.DELETE("/user/:id", userHandler.Delete)
 
-			authd.GET("/role", roleHandler.List)
-			authd.POST("/role", roleHandler.Create)
-			authd.GET("/role/:id", roleHandler.Get)
-			authd.PUT("/role/:id", roleHandler.Update)
-			authd.DELETE("/role/:id", roleHandler.Delete)
-			authd.GET("/role/menus", roleHandler.ListMenus)
-			authd.POST("/role/:id/menus", roleHandler.SetRoleMenus)
-			authd.GET("/role/:id/menus", roleHandler.GetRoleMenus)
-			authd.POST("/user/:id/roles", roleHandler.SetUserRoles)
+				roleRepo := repository.NewRoleRepository(db)
+				roleService := service.NewRoleService(roleRepo)
+				roleHandler := handler.NewRoleHandler(roleService)
 
-			operLogRepo := repository.NewOperationLogRepository(db)
-			operLogService := service.NewOperationLogService(operLogRepo)
-			operLogHandler := handler.NewOperationLogHandler(operLogService)
+				admin.GET("/role", roleHandler.List)
+				admin.POST("/role", roleHandler.Create)
+				admin.GET("/role/:id", roleHandler.Get)
+				admin.PUT("/role/:id", roleHandler.Update)
+				admin.DELETE("/role/:id", roleHandler.Delete)
+				admin.GET("/role/menus", roleHandler.ListMenus)
+				admin.POST("/role/:id/menus", roleHandler.SetRoleMenus)
+				admin.GET("/role/:id/menus", roleHandler.GetRoleMenus)
+				admin.POST("/user/:id/roles", roleHandler.SetUserRoles)
 
-			authd.GET("/operation-log", operLogHandler.List)
+				operLogRepo := repository.NewOperationLogRepository(db)
+				operLogService := service.NewOperationLogService(operLogRepo)
+				operLogHandler := handler.NewOperationLogHandler(operLogService)
+
+				admin.GET("/operation-log", operLogHandler.List)
+			}
 		}
 	}
 }

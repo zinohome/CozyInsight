@@ -62,13 +62,15 @@ func (s *ChartService) Update(ctx context.Context, id uint64, req *dto.UpdateCha
 	if req.Type != "" {
 		chart.Type = req.Type
 	}
-	if req.DatasetID != 0 {
-		chart.DatasetID = req.DatasetID
+	if req.DatasetID != nil {
+		chart.DatasetID = *req.DatasetID
 	}
 	if req.Config != "" {
 		chart.Config = req.Config
 	}
-	chart.Status = req.Status
+	if req.Status != nil {
+		chart.Status = *req.Status
+	}
 
 	return s.repo.Update(ctx, chart)
 }

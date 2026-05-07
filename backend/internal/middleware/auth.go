@@ -69,3 +69,14 @@ func GetIsAdmin(c *gin.Context) bool {
 	}
 	return false
 }
+
+func AdminRequired() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !GetIsAdmin(c) {
+			c.JSON(http.StatusForbidden, gin.H{"code": 403, "error": "admin access required"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
