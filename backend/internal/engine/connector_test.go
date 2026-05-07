@@ -3,9 +3,33 @@ package engine
 import (
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestScanRows(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	columns := []string{"id", "name", "score"}
+	mock.ExpectQuery("SELECT").
+		WillReturnRows(sqlmock.NewRows(columns).
+			AddRow(1, "Alice", 95.5).
+			AddRow(2, "Bob", 88.0))
+
+	rows, err := db.Query("SELECT")
+	require.NoError(t, err)
+	defer rows.Close()
+
+	result, err := scanRows(rows)
+	require.NoError(t, err)
+	assert.Len(t, result, 2)
+	assert.Equal(t, int64(1), result[0]["id"])
+	assert.Equal(t, "Alice", result[0]["name"])
+	assert.Equal(t, 95.5, result[0]["score"])
+}
 
 func TestNewConnector_MySQL(t *testing.T) {
 	conn, err := NewConnector("mysql")
