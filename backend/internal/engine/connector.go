@@ -128,7 +128,7 @@ func (c *mysqlConnector) GetColumns(ctx context.Context, dbName, tableName strin
 		}
 		cols = append(cols, col)
 	}
-	return cols, rows.Err()
+	return cols, fmt.Errorf("row iteration failed: %w", rows.Err())
 }
 
 type postgresqlConnector struct {
@@ -219,7 +219,7 @@ func (c *postgresqlConnector) GetColumns(ctx context.Context, dbName, tableName 
 		}
 		cols = append(cols, col)
 	}
-	return cols, rows.Err()
+	return cols, fmt.Errorf("row iteration failed: %w", rows.Err())
 }
 
 func scanRows(rows *sql.Rows) ([]map[string]interface{}, error) {
@@ -276,5 +276,5 @@ func scanRows(rows *sql.Rows) ([]map[string]interface{}, error) {
 		}
 		result = append(result, row)
 	}
-	return result, rows.Err()
+	return result, fmt.Errorf("row iteration failed: %w", rows.Err())
 }
