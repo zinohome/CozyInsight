@@ -4,23 +4,20 @@ server:
 
 database:
   driver: mysql
-  host: 127.0.0.1
+  host: localhost
   port: 3306
   username: root
-  password: password
-  database: dataease
+  password: cozyinsight
+  database: cozyinsight
   charset: utf8mb4
   parse_time: true
   loc: Local
-
-calcite:
-  avatica_url: "http://localhost:8765/"
-  max_open_conns: 100
-  max_idle_conns: 20
+  max_open_conns: 25
+  max_idle_conns: 10
   conn_max_lifetime: 1h
 
 redis:
-  host: 127.0.0.1
+  host: localhost
   port: 6379
   password: ""
   db: 0
@@ -33,4 +30,5 @@ logger:
   max_backups: 7
 
 jwt:
-  secret: "your-256-bit-secret-key-change-this-in-production-env"
+  secret: "cozy-insight-jwt-secret-change-in-production"
+  expire_hours: 24
