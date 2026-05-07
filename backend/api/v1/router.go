@@ -54,5 +54,18 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 		api.GET("/chart/:id", chartHandler.Get)
 		api.PUT("/chart/:id", chartHandler.Update)
 		api.DELETE("/chart/:id", chartHandler.Delete)
+
+		dashboardRepo := repository.NewDashboardRepository(db)
+		dashboardService := service.NewDashboardService(dashboardRepo)
+		dashboardHandler := handler.NewDashboardHandler(dashboardService)
+
+		api.GET("/dashboard", dashboardHandler.List)
+		api.POST("/dashboard", dashboardHandler.Create)
+		api.GET("/dashboard/:id", dashboardHandler.Get)
+		api.PUT("/dashboard/:id", dashboardHandler.Update)
+		api.DELETE("/dashboard/:id", dashboardHandler.Delete)
+		api.POST("/dashboard/:id/charts", dashboardHandler.AddChart)
+		api.GET("/dashboard/:id/charts", dashboardHandler.GetCharts)
+		api.DELETE("/dashboard/:id/charts/:chartId", dashboardHandler.RemoveChart)
 	}
 }
