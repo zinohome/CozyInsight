@@ -25,6 +25,10 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 	datasetService := service.NewDatasetService(datasetRepo, dsRepo)
 	datasetHandler := handler.NewDatasetHandler(datasetService)
 
+	chartRepo := repository.NewChartRepository(db)
+	chartService := service.NewChartService(chartRepo)
+	chartHandler := handler.NewChartHandler(chartService)
+
 	api := r.Group("/api/v1")
 	{
 		api.POST("/auth/register", authHandler.Register)
@@ -44,5 +48,11 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 		api.DELETE("/dataset/:id", datasetHandler.Delete)
 		api.POST("/dataset/:id/sync-fields", datasetHandler.SyncFields)
 		api.GET("/dataset/:id/preview", datasetHandler.Preview)
+
+		api.GET("/chart", chartHandler.List)
+		api.POST("/chart", chartHandler.Create)
+		api.GET("/chart/:id", chartHandler.Get)
+		api.PUT("/chart/:id", chartHandler.Update)
+		api.DELETE("/chart/:id", chartHandler.Delete)
 	}
 }

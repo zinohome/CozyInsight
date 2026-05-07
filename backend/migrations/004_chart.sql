@@ -1,0 +1,15 @@
+CREATE TABLE IF NOT EXISTS charts (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(128) NOT NULL,
+    type VARCHAR(32) NOT NULL COMMENT 'bar, line, pie, table, etc',
+    dataset_id BIGINT UNSIGNED NOT NULL,
+    config TEXT NOT NULL COMMENT 'JSON 格式的图表配置',
+    status TINYINT DEFAULT 1 COMMENT '0=禁用, 1=启用',
+    created_by BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at DATETIME DEFAULT NULL,
+    INDEX idx_dataset_id (dataset_id),
+    INDEX idx_type (type),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='图表表';
