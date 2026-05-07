@@ -21,6 +21,10 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 	dsService := service.NewDatasourceService(dsRepo)
 	dsHandler := handler.NewDatasourceHandler(dsService)
 
+	datasetRepo := repository.NewDatasetRepository(db)
+	datasetService := service.NewDatasetService(datasetRepo, dsRepo)
+	datasetHandler := handler.NewDatasetHandler(datasetService)
+
 	api := r.Group("/api/v1")
 	{
 		api.POST("/auth/register", authHandler.Register)
@@ -32,5 +36,13 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 		api.PUT("/datasource/:id", dsHandler.Update)
 		api.DELETE("/datasource/:id", dsHandler.Delete)
 		api.POST("/datasource/test", dsHandler.TestConnection)
+
+		api.GET("/dataset", datasetHandler.List)
+		api.POST("/dataset", datasetHandler.Create)
+		api.GET("/dataset/:id", datasetHandler.Get)
+		api.PUT("/dataset/:id", datasetHandler.Update)
+		api.DELETE("/dataset/:id", datasetHandler.Delete)
+		api.POST("/dataset/:id/sync-fields", datasetHandler.SyncFields)
+		api.GET("/dataset/:id/preview", datasetHandler.Preview)
 	}
 }

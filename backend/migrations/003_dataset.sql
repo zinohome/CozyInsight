@@ -1,0 +1,32 @@
+CREATE TABLE IF NOT EXISTS datasets (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(128) NOT NULL,
+    datasource_id BIGINT UNSIGNED NOT NULL,
+    database_name VARCHAR(128) DEFAULT '',
+    table_name VARCHAR(128) NOT NULL,
+    type VARCHAR(32) NOT NULL COMMENT 'db, sql, excel, api',
+    mode TINYINT DEFAULT 0 COMMENT '0=直连, 1=抽取',
+    status TINYINT DEFAULT 1 COMMENT '0=禁用, 1=启用',
+    created_by BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at DATETIME DEFAULT NULL,
+    INDEX idx_datasource_id (datasource_id),
+    INDEX idx_type (type),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='数据集表';
+
+CREATE TABLE IF NOT EXISTS dataset_fields (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    dataset_id BIGINT UNSIGNED NOT NULL,
+    name VARCHAR(128) NOT NULL,
+    type VARCHAR(64) NOT NULL,
+    de_type TINYINT DEFAULT 4 COMMENT '0=文本, 1=时间, 2=数值, 3=地理位置, 4=其他',
+    length INT DEFAULT 0,
+    precision INT DEFAULT 0,
+    scale INT DEFAULT 0,
+    origin_name VARCHAR(128) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_dataset_id (dataset_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='数据集字段表';
