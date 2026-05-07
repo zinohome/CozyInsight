@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: cozyinsight-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: cozyinsight
+      MYSQL_DATABASE: cozyinsight
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: cozyinsight-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.10
+    container_name: cozyinsight-meilisearch
+    environment:
+      MEILI_MASTER_KEY: cozyinsight-master-key
+    ports:
+      - "7700:7700"
+    volumes:
+      - meilisearch_data:/meili_data
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cozyinsight-backend
+    ports:
+      - "8100:8100"
+    environment:
+      - COZYINSIGHT_DATABASE_HOST=mysql
+      - COZYINSIGHT_DATABASE_PORT=3306
+      - COZYINSIGHT_DATABASE_USERNAME=root
+      - COZYINSIGHT_DATABASE_PASSWORD=cozyinsight
+      - COZYINSIGHT_DATABASE_DATABASE=cozyinsight
+      - COZYINSIGHT_REDIS_HOST=redis
+      - COZYINSIGHT_REDIS_PORT=6379
+    volumes:
+      - ./backend/configs:/app/configs
+      - ./backend/logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["./server", "--config", "configs/app.yaml"]
+
+volumes:
+  mysql_data:
+  redis_data:
+  meilisearch_data:

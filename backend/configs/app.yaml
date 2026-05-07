@@ -4,11 +4,11 @@ server:
 
 database:
   driver: mysql
-  host: localhost
-  port: 3306
-  username: root
-  password: cozyinsight
-  database: cozyinsight
+  host: ${COZYINSIGHT_DATABASE_HOST:-localhost}
+  port: ${COZYINSIGHT_DATABASE_PORT:-3306}
+  username: ${COZYINSIGHT_DATABASE_USERNAME:-root}
+  password: ${COZYINSIGHT_DATABASE_PASSWORD:-cozyinsight}
+  database: ${COZYINSIGHT_DATABASE_DATABASE:-cozyinsight}
   charset: utf8mb4
   parse_time: true
   loc: Local
@@ -17,8 +17,8 @@ database:
   conn_max_lifetime: 1h
 
 redis:
-  host: localhost
-  port: 6379
+  host: ${COZYINSIGHT_REDIS_HOST:-localhost}
+  port: ${COZYINSIGHT_REDIS_PORT:-6379}
   password: ""
   db: 0
 
@@ -30,5 +30,5 @@ logger:
   max_backups: 7
 
 jwt:
-  secret: "cozy-insight-jwt-secret-change-in-production"
+  secret: ${COZYINSIGHT_JWT_SECRET:-cozy-insight-jwt-secret-change-in-production}
   expire_hours: 24
