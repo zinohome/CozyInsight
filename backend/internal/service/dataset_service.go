@@ -203,7 +203,7 @@ func (s *DatasetService) inferDeType(sqlType string) int8 {
 	}
 }
 
-func (s *DatasetService) buildRowFilter(ctx context.Context, datasetID uint64, userAttrs map[string]string) (string, error) {
+func (s *DatasetService) buildRowFilter(ctx context.Context, datasetID uint64, userAttrs map[string]string) ([]RowFilterCondition, error) {
 	svc := NewRowPermissionService(s.rowPermRepo)
 	return svc.BuildRowFilter(ctx, datasetID, userAttrs)
 }

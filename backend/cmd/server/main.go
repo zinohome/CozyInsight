@@ -21,7 +21,11 @@ import (
 )
 
 func main() {
-	cfg := config.Load("configs/app.yaml")
+	cfg, err := config.Load("configs/app.yaml")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to load config: %v\n", err)
+		os.Exit(1)
+	}
 
 	log := logger.New(cfg.Logger)
 	defer log.Sync()

@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"cozy-insight/internal/model"
@@ -40,25 +39,40 @@ func (s *RowPermissionService) Delete(ctx context.Context, id uint64) error {
 	return s.repo.Delete(ctx, id)
 }
 
-// BuildRowFilter 根据用户属性构建 WHERE 条件片段
-func (s *RowPermissionService) BuildRowFilter(ctx context.Context, datasetID uint64, userAttrs map[string]string) (string, error) {
+var allowedOperators = map[string]bool{
+	"=": true, "!=": true, ">": true, "<": true, ">=": true, "<=": true,
+	"LIKE": true, "NOT LIKE": true, "IN": true, "NOT IN": true,
+}
+
+type RowFilterCondition struct {
+	FieldName string
+	Operator  string
+	Value     string
+}
+
+// BuildRowFilter 根据用户属性构建结构化 WHERE 条件
+func (s *RowPermissionService) BuildRowFilter(ctx context.Context, datasetID uint64, userAttrs map[string]string) ([]RowFilterCondition, error) {
 	permissions, err := s.repo.ListByDataset(ctx, datasetID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	var conditions []string
+	var conditions []RowFilterCondition
 	for _, p := range permissions {
 		attrValue, ok := userAttrs[p.UserAttr]
 		if !ok {
 			continue
 		}
-		cond := fmt.Sprintf("%s %s '%s'", p.FieldName, p.Operator, attrValue)
-		conditions = append(conditions, cond)
+		op := strings.ToUpper(strings.TrimSpace(p.Operator))
+		if !allowedOperators[op] {
+			continue
+		}
+		conditions = append(conditions, RowFilterCondition{
+			FieldName: p.FieldName,
+			Operator:  op,
+			Value:     attrValue,
+		})
 	}
 
-	if len(conditions) == 0 {
-		return "", nil
-	}
-	return strings.Join(conditions, " AND "), nil
+	return conditions, nil
 }

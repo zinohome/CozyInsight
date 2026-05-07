@@ -60,19 +60,19 @@ type JWTConfig struct {
 	ExpireHours  time.Duration `mapstructure:"expire_hours"`
 }
 
-func Load(path string) *Config {
+func Load(path string) (*Config, error) {
 	viper.SetConfigFile(path)
 	viper.AutomaticEnv()
 	viper.SetEnvPrefix("COZYINSIGHT")
 
 	if err := viper.ReadInConfig(); err != nil {
-		panic(fmt.Sprintf("failed to read config: %v", err))
+		return nil, fmt.Errorf("failed to read config: %w", err)
 	}
 
 	var cfg Config
 	if err := viper.Unmarshal(&cfg); err != nil {
-		panic(fmt.Sprintf("failed to unmarshal config: %v", err))
+		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	return &cfg
+	return &cfg, nil
 }
