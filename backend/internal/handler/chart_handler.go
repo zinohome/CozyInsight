@@ -91,3 +91,16 @@ func (h *ChartHandler) Delete(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"code": 200, "data": "ok"})
 }
+
+func (h *ChartHandler) GetData(c *gin.Context) {
+	id, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
+	resp, err := h.service.GetData(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 200, "data": resp})
+}
