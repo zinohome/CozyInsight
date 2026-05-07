@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Table, Button, Space, Tag, Modal, Form, Input, Select, message } from 'antd'
 import { chartAPI } from '@/api/chart'
 import { datasetAPI } from '@/api/dataset'
@@ -6,6 +7,7 @@ import type { Chart } from '@/types/chart'
 import type { Dataset } from '@/types/dataset'
 
 export default function ChartPage() {
+  const navigate = useNavigate()
   const [list, setList] = useState<Chart[]>([])
   const [datasets, setDatasets] = useState<Dataset[]>([])
   const [loading, setLoading] = useState(false)
@@ -60,6 +62,7 @@ export default function ChartPage() {
       title: '操作',
       render: (_: unknown, record: Chart) => (
         <Space>
+          <Button type="link" onClick={() => navigate(`/chart/builder/${record.id}`)}>编辑</Button>
           <Button type="link" danger onClick={() => handleDelete(record.id)}>删除</Button>
         </Space>
       ),

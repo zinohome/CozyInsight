@@ -3,6 +3,7 @@ import LoginPage from '@/pages/login'
 import DatasourcePage from '@/pages/datasource'
 import DatasetPage from '@/pages/dataset'
 import ChartPage from '@/pages/chart'
+import ChartBuilder from '@/pages/chart/ChartBuilder'
 import DashboardPage from '@/pages/dashboard'
 import UserPage from '@/pages/system/user'
 import RolePage from '@/pages/system/role'
@@ -17,6 +18,7 @@ function LayoutRoutes() {
         <Route path="/datasource" element={<DatasourcePage />} />
         <Route path="/dataset" element={<DatasetPage />} />
         <Route path="/chart" element={<ChartPage />} />
+        <Route path="/chart/builder/:id" element={<ChartBuilder />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/system/user" element={<UserPage />} />
         <Route path="/system/role" element={<RolePage />} />
