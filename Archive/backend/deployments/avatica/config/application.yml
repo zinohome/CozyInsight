@@ -1,0 +1,36 @@
+server:
+  port: 8765
+
+spring:
+  application:
+    name: avatica-server
+
+avatica:
+  # Avatica 配置
+  max-statements-per-connection: 100
+  connection-pool:
+    max-size: 100
+    min-idle: 10
+    
+calcite:
+  # Calcite 配置
+  parser:
+    factory: org.apache.calcite.sql.parser.impl.SqlParserImpl
+  optimizer:
+    enable: true
+    
+# 数据源连接池配置
+datasource:
+  hikari:
+    maximum-pool-size: 50
+    minimum-idle: 10
+    connection-timeout: 30000
+    idle-timeout: 600000
+    max-lifetime: 1800000
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    org.apache.calcite: DEBUG
+    org.apache.calcite.avatica: DEBUG

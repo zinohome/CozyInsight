@@ -1,0 +1,93 @@
+go: downloading github.com/icholy/digest v1.1.0
+go: downloading github.com/jcmturner/gokrb5/v8 v8.4.4
+go: downloading google.golang.org/protobuf v1.36.10
+go: downloading github.com/go-playground/validator/v10 v10.28.0
+go: downloading github.com/goccy/go-yaml v1.19.0
+go: downloading github.com/ugorji/go/codec v1.3.1
+go: downloading github.com/quic-go/qpack v0.6.0
+go: downloading github.com/jcmturner/dnsutils/v2 v2.0.0
+go: downloading github.com/jcmturner/gofork v1.7.6
+go: downloading github.com/hashicorp/go-uuid v1.0.3
+go: downloading github.com/jcmturner/goidentity/v6 v6.0.1
+go: downloading github.com/gabriel-vasile/mimetype v1.4.11
+go: downloading github.com/go-playground/universal-translator v0.18.1
+go: downloading github.com/leodido/go-urn v1.4.0
+go: downloading github.com/go-playground/locales v0.14.1
+# cozy-insight-backend/api/v1
+internal/service/schedule_service.go:11:2: github.com/redis/go-redis/v9@v9.7.0: missing go.sum entry for go.mod file; to add it:
+	go mod download github.com/redis/go-redis/v9
+# cozy-insight-backend/api/v1
+internal/service/export_service.go:9:2: github.com/redis/go-redis/v9@v9.7.0: missing go.sum entry for go.mod file; to add it:
+	go mod download github.com/redis/go-redis/v9
+FAIL	cozy-insight-backend/api/v1 [setup failed]
+# cozy-insight-backend/cmd/server
+cmd/server/main.go:4:2: github.com/redis/go-redis/v9@v9.7.0: missing go.sum entry for go.mod file; to add it:
+	go mod download github.com/redis/go-redis/v9
+# cozy-insight-backend/cmd/server
+internal/service/schedule_service.go:11:2: github.com/redis/go-redis/v9@v9.7.0: missing go.sum entry for go.mod file; to add it:
+	go mod download github.com/redis/go-redis/v9
+# cozy-insight-backend/cmd/server
+internal/service/export_service.go:9:2: github.com/redis/go-redis/v9@v9.7.0: missing go.sum entry for go.mod file; to add it:
+	go mod download github.com/redis/go-redis/v9
+# cozy-insight-backend/cmd/server
+pkg/cache/redis.go:9:2: missing go.sum entry for module providing package github.com/redis/go-redis/v9 (imported by cozy-insight-backend/pkg/cache); to add:
+	go get cozy-insight-backend/pkg/cache
+FAIL	cozy-insight-backend/cmd/server [setup failed]
+# cozy-insight-backend/internal/handler
+internal/service/schedule_service.go:11:2: github.com/redis/go-redis/v9@v9.7.0: missing go.sum entry for go.mod file; to add it:
+	go mod download github.com/redis/go-redis/v9
+# cozy-insight-backend/internal/handler
+internal/service/export_service.go:9:2: github.com/redis/go-redis/v9@v9.7.0: missing go.sum entry for go.mod file; to add it:
+	go mod download github.com/redis/go-redis/v9
+FAIL	cozy-insight-backend/internal/handler [setup failed]
+# cozy-insight-backend/internal/middleware
+internal/service/schedule_service.go:11:2: github.com/redis/go-redis/v9@v9.7.0: missing go.sum entry for go.mod file; to add it:
+	go mod download github.com/redis/go-redis/v9
+# cozy-insight-backend/internal/middleware
+internal/service/export_service.go:9:2: github.com/redis/go-redis/v9@v9.7.0: missing go.sum entry for go.mod file; to add it:
+	go mod download github.com/redis/go-redis/v9
+FAIL	cozy-insight-backend/internal/middleware [setup failed]
+# cozy-insight-backend/internal/service
+internal/service/schedule_service.go:11:2: github.com/redis/go-redis/v9@v9.7.0: missing go.sum entry for go.mod file; to add it:
+	go mod download github.com/redis/go-redis/v9
+# cozy-insight-backend/internal/service
+internal/service/export_service.go:9:2: github.com/redis/go-redis/v9@v9.7.0: missing go.sum entry for go.mod file; to add it:
+	go mod download github.com/redis/go-redis/v9
+FAIL	cozy-insight-backend/internal/service [setup failed]
+# cozy-insight-backend/pkg/cache
+pkg/cache/redis.go:9:2: missing go.sum entry for module providing package github.com/redis/go-redis/v9 (imported by cozy-insight-backend/pkg/cache); to add:
+	go get cozy-insight-backend/pkg/cache
+FAIL	cozy-insight-backend/pkg/cache [setup failed]
+=== RUN   TestNewCalciteClient
+=== RUN   TestNewCalciteClient/nil_config_should_fail
+=== RUN   TestNewCalciteClient/valid_config
+    calcite_client_test.go:66: Avatica server not available: failed to ping Avatica: error executing http request: Post "http://localhost:8765/": dial tcp 127.0.0.1:8765: connect: connection refused
+--- PASS: TestNewCalciteClient (0.01s)
+    --- PASS: TestNewCalciteClient/nil_config_should_fail (0.00s)
+    --- SKIP: TestNewCalciteClient/valid_config (0.01s)
+=== RUN   TestCalciteClient_GenerateCacheKey
+=== RUN   TestCalciteClient_GenerateCacheKey/simple_query
+=== RUN   TestCalciteClient_GenerateCacheKey/query_with_params
+--- PASS: TestCalciteClient_GenerateCacheKey (0.00s)
+    --- PASS: TestCalciteClient_GenerateCacheKey/simple_query (0.00s)
+    --- PASS: TestCalciteClient_GenerateCacheKey/query_with_params (0.00s)
+=== RUN   TestCalciteClient_ExecuteQuery_WithCache
+    calcite_client_test.go:113: Integration test - requires Avatica Server
+--- SKIP: TestCalciteClient_ExecuteQuery_WithCache (0.00s)
+=== RUN   TestCalciteClient_Stats
+    calcite_client_test.go:143: Integration test - requires Avatica Server
+--- SKIP: TestCalciteClient_Stats (0.00s)
+PASS
+coverage: 9.7% of statements
+ok  	cozy-insight-backend/internal/engine	0.883s	coverage: 9.7% of statements
+# cozy-insight-backend/internal/repository_test [cozy-insight-backend/internal/repository.test]
+internal/repository/repository_test.go:4:2: "context" imported and not used
+internal/repository/repository_test.go:8:2: "cozy-insight-backend/internal/repository" imported and not used
+internal/repository/repository_test.go:21:19: undefined: model.Chart
+	cozy-insight-backend/internal/model		coverage: 0.0% of statements
+FAIL	cozy-insight-backend/internal/repository [build failed]
+	cozy-insight-backend/pkg/config		coverage: 0.0% of statements
+	cozy-insight-backend/pkg/database		coverage: 0.0% of statements
+	cozy-insight-backend/pkg/jwt		coverage: 0.0% of statements
+	cozy-insight-backend/pkg/logger		coverage: 0.0% of statements
+FAIL

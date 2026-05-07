@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  avatica:
+    build: .
+    container_name: cozyinsight-avatica
+    ports:
+      - "8765:8765"
+    environment:
+      - JAVA_OPTS=-Xmx2g -Xms1g -XX:+UseG1GC
+    volumes:
+      - ./config:/app/config
+      - ./drivers:/app/drivers
+      - ./logs:/app/logs
+    networks:
+      - cozyinsight-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8765/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+networks:
+  cozyinsight-network:
+    driver: bridge
