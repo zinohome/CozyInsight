@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"cozy-insight/api/v1"
 	"cozy-insight/pkg/config"
 	"cozy-insight/pkg/database"
 	"cozy-insight/pkg/logger"
@@ -36,6 +37,8 @@ func main() {
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
+
+	v1.Setup(db, cfg, r)
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
