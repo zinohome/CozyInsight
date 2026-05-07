@@ -27,6 +27,11 @@ func NewDatasetService(repo *repository.DatasetRepository, dsRepo *repository.Da
 	}
 }
 
+// SetConnectorFactory sets the connector factory (for testing).
+func (s *DatasetService) SetConnectorFactory(f func(string) (engine.DatasourceConnector, error)) {
+	s.newConnector = f
+}
+
 func (s *DatasetService) Create(ctx context.Context, req *dto.CreateDatasetRequest, userID uint64) (*model.Dataset, error) {
 	ds := &model.Dataset{
 		Name:         req.Name,

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -16,9 +17,24 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"cozy-insight/internal/dto"
+	"cozy-insight/internal/engine"
 	"cozy-insight/internal/repository"
 	"cozy-insight/internal/service"
 )
+
+type testConnector struct {
+	columns []engine.ColumnInfo
+	data    []map[string]interface{}
+}
+
+func (m *testConnector) Connect(configJSON string) error { return nil }
+func (m *testConnector) Close() error                      { return nil }
+func (m *testConnector) Query(ctx context.Context, query string, args ...interface{}) ([]map[string]interface{}, error) {
+	return m.data, nil
+}
+func (m *testConnector) GetColumns(ctx context.Context, dbName, tableName string) ([]engine.ColumnInfo, error) {
+	return m.columns, nil
+}
 
 func setupDatasetHandler(t *testing.T) (*gin.Engine, sqlmock.Sqlmock) {
 	gin.SetMode(gin.TestMode)
@@ -31,6 +47,12 @@ func setupDatasetHandler(t *testing.T) (*gin.Engine, sqlmock.Sqlmock) {
 	rowPermRepo := repository.NewRowPermissionRepository(sqlxDB)
 	repo := repository.NewDatasetRepository(sqlxDB)
 	svc := service.NewDatasetService(repo, dsRepo, rowPermRepo)
+	svc.SetConnectorFactory(func(string) (engine.DatasourceConnector, error) {
+		return &testConnector{
+			columns: []engine.ColumnInfo{{Name: "id", Type: "INT", Length: 11}},
+			data:    []map[string]interface{}{{ "id": 1 }},
+		}, nil
+	})
 	h := NewDatasetHandler(svc)
 
 	r := gin.New()
