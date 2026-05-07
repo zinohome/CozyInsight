@@ -28,7 +28,9 @@ func setupChartHandler(t *testing.T) (*gin.Engine, sqlmock.Sqlmock) {
 
 	sqlxDB := sqlx.NewDb(db, "mysql")
 	repo := repository.NewChartRepository(sqlxDB)
-	svc := service.NewChartService(repo)
+	datasetRepo := repository.NewDatasetRepository(sqlxDB)
+	dsRepo := repository.NewDatasourceRepository(sqlxDB)
+	svc := service.NewChartService(repo, datasetRepo, dsRepo)
 	h := NewChartHandler(svc)
 
 	r := gin.New()

@@ -18,7 +18,9 @@ import (
 func TestChartService_Create(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewChartRepository(db)
-	svc := NewChartService(repo)
+	datasetRepo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	svc := NewChartService(repo, datasetRepo, dsRepo)
 
 	mock.ExpectExec("INSERT INTO charts").
 		WillReturnResult(sqlmock.NewResult(1, 1))
@@ -38,7 +40,9 @@ func TestChartService_Create(t *testing.T) {
 func TestChartService_GetByID(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewChartRepository(db)
-	svc := NewChartService(repo)
+	datasetRepo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	svc := NewChartService(repo, datasetRepo, dsRepo)
 
 	columns := []string{"id", "title", "type", "dataset_id", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
@@ -59,7 +63,9 @@ func TestChartService_GetByID(t *testing.T) {
 func TestChartService_List(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewChartRepository(db)
-	svc := NewChartService(repo)
+	datasetRepo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	svc := NewChartService(repo, datasetRepo, dsRepo)
 
 	columns := []string{"id", "title", "type", "dataset_id", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
@@ -77,7 +83,9 @@ func TestChartService_List(t *testing.T) {
 func TestChartService_Update(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewChartRepository(db)
-	svc := NewChartService(repo)
+	datasetRepo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	svc := NewChartService(repo, datasetRepo, dsRepo)
 
 	columns := []string{"id", "title", "type", "dataset_id", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
@@ -106,7 +114,9 @@ func TestChartService_Update(t *testing.T) {
 func TestChartService_Update_NotFound(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewChartRepository(db)
-	svc := NewChartService(repo)
+	datasetRepo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	svc := NewChartService(repo, datasetRepo, dsRepo)
 
 	mock.ExpectQuery("SELECT \\* FROM charts WHERE id = \\? AND deleted_at IS NULL").
 		WithArgs(1).
@@ -119,7 +129,9 @@ func TestChartService_Update_NotFound(t *testing.T) {
 func TestChartService_Delete(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewChartRepository(db)
-	svc := NewChartService(repo)
+	datasetRepo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	svc := NewChartService(repo, datasetRepo, dsRepo)
 
 	mock.ExpectExec("UPDATE charts SET deleted_at = NOW").
 		WithArgs(1).
@@ -128,4 +140,44 @@ func TestChartService_Delete(t *testing.T) {
 	err := svc.Delete(context.Background(), 1)
 	require.NoError(t, err)
 	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestChartService_GetData(t *testing.T) {
+	db, mock := testutil.NewMockDB(t)
+	chartRepo := repository.NewChartRepository(db)
+	datasetRepo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	svc := NewChartService(chartRepo, datasetRepo, dsRepo)
+
+	// Mock chart SELECT
+	chartCols := []string{"id", "title", "type", "dataset_id", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	now := time.Now()
+	mock.ExpectQuery("SELECT \\* FROM charts WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(chartCols).AddRow(
+			1, "Sales", "bar", 1,
+			`{"dimensions":[{"field":"month"}],"metrics":[{"field":"amount","aggregation":"SUM"}]}`,
+			1, 1, now, now, nil,
+		))
+
+	// Mock dataset SELECT
+	dsCols := []string{"id", "name", "datasource_id", "database_name", "table_name", "type", "mode", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	mock.ExpectQuery("SELECT \\* FROM datasets WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(dsCols).AddRow(
+			1, "Sales DS", 1, "db", "sales", "table", 0, 1, 1, now, now, nil,
+		))
+
+	// Mock datasource SELECT
+	datasourceCols := []string{"id", "name", "type", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	mock.ExpectQuery("SELECT \\* FROM datasources WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(datasourceCols).AddRow(
+			1, "Local MySQL", "mysql", `{"host":"localhost","port":3306}`, 1, 1, now, now, nil,
+		))
+
+	// Connection will fail because config is incomplete (no username/password/database)
+	_, err := svc.GetData(context.Background(), 1)
+	assert.Error(t, err)
+	// Should get "connect failed" error from Ping failing
 }
