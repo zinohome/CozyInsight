@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"cozy-insight/internal/dto"
 	"cozy-insight/internal/engine"
@@ -153,7 +154,7 @@ func (s *ChartService) GetData(ctx context.Context, chartID uint64) (*dto.ChartD
 	for _, m := range config.Metrics {
 		alias := m.Alias
 		if alias == "" {
-			alias = fmt.Sprintf("%s_%s", m.Aggregation, m.Field)
+			alias = fmt.Sprintf("%s_%s", strings.ToLower(m.Aggregation), m.Field)
 		}
 		metricNames = append(metricNames, alias)
 	}
