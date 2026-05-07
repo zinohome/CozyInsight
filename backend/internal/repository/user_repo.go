@@ -54,3 +54,36 @@ func (r *UserRepository) UpdateLastLogin(ctx context.Context, id uint64) error {
 	}
 	return nil
 }
+
+func (r *UserRepository) List(ctx context.Context) ([]model.User, error) {
+	var list []model.User
+	query := `SELECT id, username, email, nick_name, avatar, phone, status, is_admin, last_login_at, created_at, updated_at FROM users WHERE deleted_at IS NULL ORDER BY created_at DESC`
+	if err := r.db.SelectContext(ctx, &list, query); err != nil {
+		return nil, fmt.Errorf("list users failed: %w", err)
+	}
+	return list, nil
+}
+
+func (r *UserRepository) Update(ctx context.Context, user *model.User) error {
+	query := `UPDATE users SET email = :email, nick_name = :nick_name, avatar = :avatar, phone = :phone, status = :status, is_admin = :is_admin WHERE id = :id`
+	if _, err := r.db.NamedExecContext(ctx, query, user); err != nil {
+		return fmt.Errorf("update user failed: %w", err)
+	}
+	return nil
+}
+
+func (r *UserRepository) UpdatePassword(ctx context.Context, id uint64, passwordHash string) error {
+	query := `UPDATE users SET password_hash = ? WHERE id = ?`
+	if _, err := r.db.ExecContext(ctx, query, passwordHash, id); err != nil {
+		return fmt.Errorf("update password failed: %w", err)
+	}
+	return nil
+}
+
+func (r *UserRepository) Delete(ctx context.Context, id uint64) error {
+	query := `UPDATE users SET deleted_at = NOW() WHERE id = ?`
+	if _, err := r.db.ExecContext(ctx, query, id); err != nil {
+		return fmt.Errorf("delete user failed: %w", err)
+	}
+	return nil
+}

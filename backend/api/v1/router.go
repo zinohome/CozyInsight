@@ -71,6 +71,18 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 			authd.POST("/dashboard/:id/charts", dashboardHandler.AddChart)
 			authd.GET("/dashboard/:id/charts", dashboardHandler.GetCharts)
 			authd.DELETE("/dashboard/:id/charts/:chartId", dashboardHandler.RemoveChart)
+
+			userRepo := repository.NewUserRepository(db)
+			userService := service.NewUserService(userRepo)
+			userHandler := handler.NewUserHandler(userService)
+
+			authd.GET("/user", userHandler.List)
+			authd.POST("/user", userHandler.Create)
+			authd.GET("/user/:id", userHandler.Get)
+			authd.PUT("/user/:id", userHandler.Update)
+			authd.DELETE("/user/:id", userHandler.Delete)
+			authd.GET("/user/profile", userHandler.Profile)
+			authd.POST("/user/change-password", userHandler.ChangePassword)
 		}
 	}
 }
