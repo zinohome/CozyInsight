@@ -17,9 +17,20 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 	authService := service.NewAuthService(userRepo, jwtManager)
 	authHandler := handler.NewAuthHandler(authService)
 
+	dsRepo := repository.NewDatasourceRepository(db)
+	dsService := service.NewDatasourceService(dsRepo)
+	dsHandler := handler.NewDatasourceHandler(dsService)
+
 	api := r.Group("/api/v1")
 	{
 		api.POST("/auth/register", authHandler.Register)
 		api.POST("/auth/login", authHandler.Login)
+
+		api.GET("/datasource", dsHandler.List)
+		api.POST("/datasource", dsHandler.Create)
+		api.GET("/datasource/:id", dsHandler.Get)
+		api.PUT("/datasource/:id", dsHandler.Update)
+		api.DELETE("/datasource/:id", dsHandler.Delete)
+		api.POST("/datasource/test", dsHandler.TestConnection)
 	}
 }
