@@ -23,8 +23,11 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 	dsHandler := handler.NewDatasourceHandler(dsService)
 
 	datasetRepo := repository.NewDatasetRepository(db)
-	datasetService := service.NewDatasetService(datasetRepo, dsRepo)
+	rowPermRepo := repository.NewRowPermissionRepository(db)
+	datasetService := service.NewDatasetService(datasetRepo, dsRepo, rowPermRepo)
 	datasetHandler := handler.NewDatasetHandler(datasetService)
+	rowPermService := service.NewRowPermissionService(rowPermRepo)
+	rowPermHandler := handler.NewRowPermissionHandler(rowPermService)
 
 	chartRepo := repository.NewChartRepository(db)
 	chartService := service.NewChartService(chartRepo)
@@ -56,6 +59,9 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 			authd.DELETE("/dataset/:id", datasetHandler.Delete)
 			authd.POST("/dataset/:id/sync-fields", datasetHandler.SyncFields)
 			authd.GET("/dataset/:id/preview", datasetHandler.Preview)
+			authd.GET("/dataset/:id/row-permissions", rowPermHandler.List)
+			authd.POST("/dataset/:id/row-permissions", rowPermHandler.Create)
+			authd.DELETE("/dataset/:id/row-permissions/:permId", rowPermHandler.Delete)
 
 			authd.GET("/chart", chartHandler.List)
 			authd.POST("/chart", chartHandler.Create)

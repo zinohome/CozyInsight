@@ -11,12 +11,13 @@ import (
 )
 
 type DatasetService struct {
-	repo   *repository.DatasetRepository
-	dsRepo *repository.DatasourceRepository
+	repo        *repository.DatasetRepository
+	dsRepo      *repository.DatasourceRepository
+	rowPermRepo *repository.RowPermissionRepository
 }
 
-func NewDatasetService(repo *repository.DatasetRepository, dsRepo *repository.DatasourceRepository) *DatasetService {
-	return &DatasetService{repo: repo, dsRepo: dsRepo}
+func NewDatasetService(repo *repository.DatasetRepository, dsRepo *repository.DatasourceRepository, rowPermRepo *repository.RowPermissionRepository) *DatasetService {
+	return &DatasetService{repo: repo, dsRepo: dsRepo, rowPermRepo: rowPermRepo}
 }
 
 func (s *DatasetService) Create(ctx context.Context, req *dto.CreateDatasetRequest, userID uint64) (*model.Dataset, error) {
@@ -134,6 +135,12 @@ func (s *DatasetService) PreviewData(ctx context.Context, id uint64, limit uint6
 		return nil, err
 	}
 
+	// TODO: 行级权限过滤（当前未接入真实用户属性系统）
+	// rowFilter, _ := s.buildRowFilter(ctx, id, map[string]string{"dept_id": "1"})
+	// if rowFilter != "" {
+	//     // 将 rowFilter 注入 SQL WHERE
+	// }
+
 	data, err := s.queryTableData(ctx, datasource, ds.DatabaseName, ds.TableName, limit)
 	if err != nil {
 		return nil, fmt.Errorf("query table data failed: %w", err)
@@ -194,4 +201,9 @@ func (s *DatasetService) inferDeType(sqlType string) int8 {
 	default:
 		return 4
 	}
+}
+
+func (s *DatasetService) buildRowFilter(ctx context.Context, datasetID uint64, userAttrs map[string]string) (string, error) {
+	svc := NewRowPermissionService(s.rowPermRepo)
+	return svc.BuildRowFilter(ctx, datasetID, userAttrs)
 }
