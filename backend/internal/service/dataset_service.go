@@ -6,18 +6,25 @@ import (
 	"strings"
 
 	"cozy-insight/internal/dto"
+	"cozy-insight/internal/engine"
 	"cozy-insight/internal/model"
 	"cozy-insight/internal/repository"
 )
 
 type DatasetService struct {
-	repo        *repository.DatasetRepository
-	dsRepo      *repository.DatasourceRepository
-	rowPermRepo *repository.RowPermissionRepository
+	repo         *repository.DatasetRepository
+	dsRepo       *repository.DatasourceRepository
+	rowPermRepo  *repository.RowPermissionRepository
+	newConnector func(string) (engine.DatasourceConnector, error)
 }
 
 func NewDatasetService(repo *repository.DatasetRepository, dsRepo *repository.DatasourceRepository, rowPermRepo *repository.RowPermissionRepository) *DatasetService {
-	return &DatasetService{repo: repo, dsRepo: dsRepo, rowPermRepo: rowPermRepo}
+	return &DatasetService{
+		repo:         repo,
+		dsRepo:       dsRepo,
+		rowPermRepo:  rowPermRepo,
+		newConnector: engine.NewConnector,
+	}
 }
 
 func (s *DatasetService) Create(ctx context.Context, req *dto.CreateDatasetRequest, userID uint64) (*model.Dataset, error) {
@@ -179,18 +186,42 @@ type columnInfo struct {
 }
 
 func (s *DatasetService) getTableColumns(ctx context.Context, ds *model.Datasource, dbName, tableName string) ([]columnInfo, error) {
-	return []columnInfo{
-		{Name: "id", Type: "BIGINT", Length: 20},
-		{Name: "name", Type: "VARCHAR", Length: 255},
-		{Name: "created_at", Type: "DATETIME", Length: 0},
-	}, nil
+	conn, err := s.newConnector(ds.Type)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	if err := conn.Connect(ds.Config); err != nil {
+		return nil, fmt.Errorf("connect failed: %w", err)
+	}
+	cols, err := conn.GetColumns(ctx, dbName, tableName)
+	if err != nil {
+		return nil, fmt.Errorf("get columns failed: %w", err)
+	}
+	var result []columnInfo
+	for _, c := range cols {
+		result = append(result, columnInfo{
+			Name:      c.Name,
+			Type:      c.Type,
+			Length:    c.Length,
+			Precision: c.Precision,
+			Scale:     c.Scale,
+		})
+	}
+	return result, nil
 }
 
 func (s *DatasetService) queryTableData(ctx context.Context, ds *model.Datasource, dbName, tableName string, limit uint64) ([]map[string]interface{}, error) {
-	return []map[string]interface{}{
-		{"id": 1, "name": "Test 1", "created_at": "2024-01-01"},
-		{"id": 2, "name": "Test 2", "created_at": "2024-01-02"},
-	}, nil
+	conn, err := s.newConnector(ds.Type)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	if err := conn.Connect(ds.Config); err != nil {
+		return nil, fmt.Errorf("connect failed: %w", err)
+	}
+	query := fmt.Sprintf("SELECT * FROM %s LIMIT %d", quoteIdentifier(tableName), limit)
+	return conn.Query(ctx, query)
 }
 
 func (s *DatasetService) inferDeType(sqlType string) int8 {
@@ -210,4 +241,8 @@ func (s *DatasetService) inferDeType(sqlType string) int8 {
 func (s *DatasetService) buildRowFilter(ctx context.Context, datasetID uint64, userAttrs map[string]string) ([]RowFilterCondition, error) {
 	svc := NewRowPermissionService(s.rowPermRepo)
 	return svc.BuildRowFilter(ctx, datasetID, userAttrs)
+}
+
+func quoteIdentifier(name string) string {
+	return "`" + strings.ReplaceAll(name, "`", "``") + "`"
 }

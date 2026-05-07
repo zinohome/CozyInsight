@@ -10,9 +10,25 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"cozy-insight/internal/dto"
+	"cozy-insight/internal/engine"
+	"cozy-insight/internal/model"
 	"cozy-insight/internal/repository"
 	"cozy-insight/internal/testutil"
 )
+
+type mockConnector struct {
+	columns []engine.ColumnInfo
+	data    []map[string]interface{}
+}
+
+func (m *mockConnector) Connect(configJSON string) error { return nil }
+func (m *mockConnector) Close() error                  { return nil }
+func (m *mockConnector) Query(ctx context.Context, query string, args ...interface{}) ([]map[string]interface{}, error) {
+	return m.data, nil
+}
+func (m *mockConnector) GetColumns(ctx context.Context, dbName, tableName string) ([]engine.ColumnInfo, error) {
+	return m.columns, nil
+}
 
 func TestDatasetService_Create(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
@@ -136,20 +152,38 @@ func TestDatasetService_Delete(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestDatasetService_getTableColumns(t *testing.T) {
-	svc := NewDatasetService(nil, nil, nil)
-	cols, err := svc.getTableColumns(context.Background(), nil, "db", "users")
+func TestDatasetService_getTableColumns_UsesConnector(t *testing.T) {
+	db, _ := testutil.NewMockDB(t)
+	repo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	svc := NewDatasetService(repo, dsRepo, nil)
+
+	mockConn := &mockConnector{columns: []engine.ColumnInfo{
+		{Name: "id", Type: "INT", Length: 11},
+		{Name: "name", Type: "VARCHAR", Length: 255},
+	}}
+	svc.newConnector = func(string) (engine.DatasourceConnector, error) { return mockConn, nil }
+
+	cols, err := svc.getTableColumns(context.Background(), &model.Datasource{Type: "mysql", Config: "{}"}, "db", "users")
 	require.NoError(t, err)
-	assert.Len(t, cols, 3)
+	assert.Len(t, cols, 2)
 	assert.Equal(t, "id", cols[0].Name)
+	assert.Equal(t, "INT", cols[0].Type)
 }
 
-func TestDatasetService_queryTableData(t *testing.T) {
-	svc := NewDatasetService(nil, nil, nil)
-	data, err := svc.queryTableData(context.Background(), nil, "db", "users", 10)
+func TestDatasetService_queryTableData_UsesConnector(t *testing.T) {
+	db, _ := testutil.NewMockDB(t)
+	repo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	svc := NewDatasetService(repo, dsRepo, nil)
+
+	mockConn := &mockConnector{data: []map[string]interface{}{{ "id": 42, "name": "Alice" }}}
+	svc.newConnector = func(string) (engine.DatasourceConnector, error) { return mockConn, nil }
+
+	data, err := svc.queryTableData(context.Background(), &model.Datasource{Type: "mysql", Config: "{}"}, "db", "users", 10)
 	require.NoError(t, err)
-	assert.Len(t, data, 2)
-	assert.Equal(t, "Test 1", data[0]["name"])
+	assert.Len(t, data, 1)
+	assert.Equal(t, 42, data[0]["id"])
 }
 
 func TestDatasetService_buildRowFilter(t *testing.T) {
