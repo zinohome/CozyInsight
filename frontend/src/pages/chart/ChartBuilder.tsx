@@ -168,7 +168,10 @@ export default function ChartBuilder() {
               <Radio.Group value={chartType} onChange={e => setChartType(e.target.value)}>
                 <Radio.Button value="bar">柱状图</Radio.Button>
                 <Radio.Button value="line">折线图</Radio.Button>
+                <Radio.Button value="area">面积图</Radio.Button>
                 <Radio.Button value="pie">饼图</Radio.Button>
+                <Radio.Button value="scatter">散点图</Radio.Button>
+                <Radio.Button value="radar">雷达图</Radio.Button>
                 <Radio.Button value="table">表格</Radio.Button>
               </Radio.Group>
             </div>

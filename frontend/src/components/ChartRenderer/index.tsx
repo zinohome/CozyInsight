@@ -1,4 +1,4 @@
-import { Bar, Line, Pie } from '@ant-design/charts'
+import { Bar, Line, Pie, Area, Scatter, Radar } from '@ant-design/charts'
 import { Table } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 
@@ -67,6 +67,36 @@ export default function ChartRenderer({ type, data, config, height = 300 }: Char
         />
       )
     }
+    case 'area':
+      return (
+        <Area
+          data={data}
+          xField={xField}
+          yField={yField}
+          height={height}
+          autoFit
+        />
+      )
+    case 'scatter':
+      return (
+        <Scatter
+          data={data}
+          xField={xField}
+          yField={yField}
+          height={height}
+          autoFit
+        />
+      )
+    case 'radar':
+      return (
+        <Radar
+          data={data}
+          xField={xField}
+          yField={yField}
+          height={height}
+          autoFit
+        />
+      )
     case 'table': {
       const cols: ColumnsType<Record<string, unknown>> = []
       for (const d of dimensions) {
