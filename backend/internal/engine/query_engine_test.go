@@ -39,8 +39,8 @@ func TestBuildSQL_WithOrder(t *testing.T) {
 	}
 	sql, args, err := BuildSQL("sales", "mysql", config)
 	require.NoError(t, err)
-	assert.Equal(t, "SELECT `month`, SUM(`revenue`) AS `sum_revenue` FROM `sales` GROUP BY `month` ORDER BY `revenue` desc LIMIT 10", sql)
-	assert.Len(t, args, 0)
+	assert.Equal(t, "SELECT `month`, SUM(`revenue`) AS `sum_revenue` FROM `sales` GROUP BY `month` ORDER BY `revenue` desc LIMIT ?", sql)
+	assert.Equal(t, []interface{}{uint64(10)}, args)
 }
 
 func TestBuildSQL_InvalidAggregation(t *testing.T) {

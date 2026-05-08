@@ -128,7 +128,8 @@ func BuildSQL(tableName string, dialect string, config ChartQueryConfig) (string
 	}
 
 	if config.Limit > 0 {
-		query += fmt.Sprintf(" LIMIT %d", config.Limit)
+		query += " LIMIT ?"
+		args = append(args, config.Limit)
 	}
 
 	return query, args, nil

@@ -12,18 +12,20 @@ import (
 )
 
 type DatasetService struct {
-	repo         *repository.DatasetRepository
-	dsRepo       *repository.DatasourceRepository
-	rowPermRepo  *repository.RowPermissionRepository
-	newConnector func(string) (engine.DatasourceConnector, error)
+	repo          *repository.DatasetRepository
+	dsRepo        *repository.DatasourceRepository
+	rowPermRepo   *repository.RowPermissionRepository
+	connectorPool *engine.ConnectorPool
+	newConnector  func(string) (engine.DatasourceConnector, error)
 }
 
-func NewDatasetService(repo *repository.DatasetRepository, dsRepo *repository.DatasourceRepository, rowPermRepo *repository.RowPermissionRepository) *DatasetService {
+func NewDatasetService(repo *repository.DatasetRepository, dsRepo *repository.DatasourceRepository, rowPermRepo *repository.RowPermissionRepository, pool *engine.ConnectorPool) *DatasetService {
 	return &DatasetService{
-		repo:         repo,
-		dsRepo:       dsRepo,
-		rowPermRepo:  rowPermRepo,
-		newConnector: engine.NewConnector,
+		repo:          repo,
+		dsRepo:        dsRepo,
+		rowPermRepo:   rowPermRepo,
+		connectorPool: pool,
+		newConnector:  engine.NewConnector,
 	}
 }
 
@@ -205,13 +207,22 @@ type columnInfo struct {
 }
 
 func (s *DatasetService) getTableColumns(ctx context.Context, ds *model.Datasource, dbName, tableName string) ([]columnInfo, error) {
-	conn, err := s.newConnector(ds.Type)
-	if err != nil {
-		return nil, fmt.Errorf("create connector failed: %w", err)
+	var conn engine.DatasourceConnector
+	var err error
+	if s.connectorPool != nil {
+		conn, err = s.connectorPool.Get(ds.ID, ds.Type, ds.Config)
+	} else {
+		conn, err = s.newConnector(ds.Type)
+		if err != nil {
+			return nil, fmt.Errorf("create connector failed: %w", err)
+		}
+		if err := conn.Connect(ds.Config); err != nil {
+			return nil, fmt.Errorf("connect failed: %w", err)
+		}
+		defer conn.Close()
 	}
-	defer conn.Close()
-	if err := conn.Connect(ds.Config); err != nil {
-		return nil, fmt.Errorf("connect failed: %w", err)
+	if err != nil {
+		return nil, fmt.Errorf("get connector failed: %w", err)
 	}
 	cols, err := conn.GetColumns(ctx, dbName, tableName)
 	if err != nil {
@@ -231,13 +242,22 @@ func (s *DatasetService) getTableColumns(ctx context.Context, ds *model.Datasour
 }
 
 func (s *DatasetService) queryTableData(ctx context.Context, ds *model.Datasource, dbName, tableName string, limit uint64) ([]map[string]interface{}, error) {
-	conn, err := s.newConnector(ds.Type)
-	if err != nil {
-		return nil, fmt.Errorf("create connector failed: %w", err)
+	var conn engine.DatasourceConnector
+	var err error
+	if s.connectorPool != nil {
+		conn, err = s.connectorPool.Get(ds.ID, ds.Type, ds.Config)
+	} else {
+		conn, err = s.newConnector(ds.Type)
+		if err != nil {
+			return nil, fmt.Errorf("create connector failed: %w", err)
+		}
+		if err := conn.Connect(ds.Config); err != nil {
+			return nil, fmt.Errorf("connect failed: %w", err)
+		}
+		defer conn.Close()
 	}
-	defer conn.Close()
-	if err := conn.Connect(ds.Config); err != nil {
-		return nil, fmt.Errorf("connect failed: %w", err)
+	if err != nil {
+		return nil, fmt.Errorf("get connector failed: %w", err)
 	}
 	var tableRef string
 	if dbName != "" {
@@ -245,18 +265,27 @@ func (s *DatasetService) queryTableData(ctx context.Context, ds *model.Datasourc
 	} else {
 		tableRef = engine.QuoteIdentifier(tableName, ds.Type)
 	}
-	query := fmt.Sprintf("SELECT * FROM %s LIMIT %d", tableRef, limit)
-	return conn.Query(ctx, query)
+	query := fmt.Sprintf("SELECT * FROM %s LIMIT ?", tableRef)
+	return conn.Query(ctx, query, limit)
 }
 
 func (s *DatasetService) queryTableDataWithFilter(ctx context.Context, ds *model.Datasource, dbName, tableName string, limit uint64, rowFilter []RowFilterCondition) ([]map[string]interface{}, error) {
-	conn, err := s.newConnector(ds.Type)
-	if err != nil {
-		return nil, fmt.Errorf("create connector failed: %w", err)
+	var conn engine.DatasourceConnector
+	var err error
+	if s.connectorPool != nil {
+		conn, err = s.connectorPool.Get(ds.ID, ds.Type, ds.Config)
+	} else {
+		conn, err = s.newConnector(ds.Type)
+		if err != nil {
+			return nil, fmt.Errorf("create connector failed: %w", err)
+		}
+		if err := conn.Connect(ds.Config); err != nil {
+			return nil, fmt.Errorf("connect failed: %w", err)
+		}
+		defer conn.Close()
 	}
-	defer conn.Close()
-	if err := conn.Connect(ds.Config); err != nil {
-		return nil, fmt.Errorf("connect failed: %w", err)
+	if err != nil {
+		return nil, fmt.Errorf("get connector failed: %w", err)
 	}
 
 	var tableRef string
@@ -278,18 +307,28 @@ func (s *DatasetService) queryTableDataWithFilter(ctx context.Context, ds *model
 		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
 
-	query += fmt.Sprintf(" LIMIT %d", limit)
+	query += " LIMIT ?"
+	args = append(args, limit)
 	return conn.Query(ctx, query, args...)
 }
 
 func (s *DatasetService) getSQLColumns(ctx context.Context, ds *model.Datasource, sql string) ([]columnInfo, error) {
-	conn, err := s.newConnector(ds.Type)
-	if err != nil {
-		return nil, fmt.Errorf("create connector failed: %w", err)
+	var conn engine.DatasourceConnector
+	var err error
+	if s.connectorPool != nil {
+		conn, err = s.connectorPool.Get(ds.ID, ds.Type, ds.Config)
+	} else {
+		conn, err = s.newConnector(ds.Type)
+		if err != nil {
+			return nil, fmt.Errorf("create connector failed: %w", err)
+		}
+		if err := conn.Connect(ds.Config); err != nil {
+			return nil, fmt.Errorf("connect failed: %w", err)
+		}
+		defer conn.Close()
 	}
-	defer conn.Close()
-	if err := conn.Connect(ds.Config); err != nil {
-		return nil, fmt.Errorf("connect failed: %w", err)
+	if err != nil {
+		return nil, fmt.Errorf("get connector failed: %w", err)
 	}
 	wrappedSQL := fmt.Sprintf("SELECT * FROM (%s) AS t LIMIT 0", sql)
 	data, err := conn.Query(ctx, wrappedSQL)
@@ -297,8 +336,8 @@ func (s *DatasetService) getSQLColumns(ctx context.Context, ds *model.Datasource
 		return nil, fmt.Errorf("query sql failed: %w", err)
 	}
 	if len(data) == 0 {
-		wrappedSQL = fmt.Sprintf("SELECT * FROM (%s) AS t LIMIT 1", sql)
-		data, err = conn.Query(ctx, wrappedSQL)
+		wrappedSQL = fmt.Sprintf("SELECT * FROM (%s) AS t LIMIT ?", sql)
+		data, err = conn.Query(ctx, wrappedSQL, 1)
 		if err != nil {
 			return nil, fmt.Errorf("query sql with limit 1 failed: %w", err)
 		}
@@ -318,16 +357,25 @@ func (s *DatasetService) getSQLColumns(ctx context.Context, ds *model.Datasource
 }
 
 func (s *DatasetService) querySQLData(ctx context.Context, ds *model.Datasource, sql string, limit uint64) ([]map[string]interface{}, error) {
-	conn, err := s.newConnector(ds.Type)
+	var conn engine.DatasourceConnector
+	var err error
+	if s.connectorPool != nil {
+		conn, err = s.connectorPool.Get(ds.ID, ds.Type, ds.Config)
+	} else {
+		conn, err = s.newConnector(ds.Type)
+		if err != nil {
+			return nil, fmt.Errorf("create connector failed: %w", err)
+		}
+		if err := conn.Connect(ds.Config); err != nil {
+			return nil, fmt.Errorf("connect failed: %w", err)
+		}
+		defer conn.Close()
+	}
 	if err != nil {
-		return nil, fmt.Errorf("create connector failed: %w", err)
+		return nil, fmt.Errorf("get connector failed: %w", err)
 	}
-	defer conn.Close()
-	if err := conn.Connect(ds.Config); err != nil {
-		return nil, fmt.Errorf("connect failed: %w", err)
-	}
-	wrappedSQL := fmt.Sprintf("SELECT * FROM (%s) AS t LIMIT %d", sql, limit)
-	return conn.Query(ctx, wrappedSQL)
+	wrappedSQL := fmt.Sprintf("SELECT * FROM (%s) AS t LIMIT ?", sql)
+	return conn.Query(ctx, wrappedSQL, limit)
 }
 
 func (s *DatasetService) inferDeType(sqlType string) int8 {
