@@ -30,7 +30,7 @@ func setupChartHandler(t *testing.T) (*gin.Engine, sqlmock.Sqlmock) {
 	repo := repository.NewChartRepository(sqlxDB)
 	datasetRepo := repository.NewDatasetRepository(sqlxDB)
 	dsRepo := repository.NewDatasourceRepository(sqlxDB)
-	svc := service.NewChartService(repo, datasetRepo, dsRepo)
+	svc := service.NewChartService(repo, datasetRepo, dsRepo, nil)
 	h := NewChartHandler(svc)
 
 	r := gin.New()
@@ -235,7 +235,7 @@ func TestChartHandler_GetData(t *testing.T) {
 	chartRepo := repository.NewChartRepository(sqlxDB)
 	datasetRepo := repository.NewDatasetRepository(sqlxDB)
 	dsRepo := repository.NewDatasourceRepository(sqlxDB)
-	svc := service.NewChartService(chartRepo, datasetRepo, dsRepo)
+	svc := service.NewChartService(chartRepo, datasetRepo, dsRepo, nil)
 	handler := NewChartHandler(svc)
 
 	// Mock chart SELECT
@@ -285,7 +285,7 @@ func TestChartHandler_GetData_NotFound(t *testing.T) {
 	chartRepo := repository.NewChartRepository(sqlxDB)
 	datasetRepo := repository.NewDatasetRepository(sqlxDB)
 	dsRepo := repository.NewDatasourceRepository(sqlxDB)
-	svc := service.NewChartService(chartRepo, datasetRepo, dsRepo)
+	svc := service.NewChartService(chartRepo, datasetRepo, dsRepo, nil)
 	handler := NewChartHandler(svc)
 
 	mock.ExpectQuery("SELECT \\* FROM charts WHERE id = \\? AND deleted_at IS NULL").

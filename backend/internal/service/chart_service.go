@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"cozy-insight/internal/dto"
 	"cozy-insight/internal/engine"
@@ -16,10 +17,11 @@ type ChartService struct {
 	repo        *repository.ChartRepository
 	datasetRepo *repository.DatasetRepository
 	dsRepo      *repository.DatasourceRepository
+	cache       *CacheService
 }
 
-func NewChartService(repo *repository.ChartRepository, datasetRepo *repository.DatasetRepository, dsRepo *repository.DatasourceRepository) *ChartService {
-	return &ChartService{repo: repo, datasetRepo: datasetRepo, dsRepo: dsRepo}
+func NewChartService(repo *repository.ChartRepository, datasetRepo *repository.DatasetRepository, dsRepo *repository.DatasourceRepository, cache *CacheService) *ChartService {
+	return &ChartService{repo: repo, datasetRepo: datasetRepo, dsRepo: dsRepo, cache: cache}
 }
 
 func (s *ChartService) Create(ctx context.Context, req *dto.CreateChartRequest, userID uint64) (*model.Chart, error) {
@@ -87,6 +89,12 @@ func (s *ChartService) GetData(ctx context.Context, chartID uint64) (*dto.ChartD
 	chart, err := s.repo.FindByID(ctx, chartID)
 	if err != nil {
 		return nil, fmt.Errorf("chart not found: %w", err)
+	}
+
+	if s.cache != nil {
+		if cached, err := s.cache.GetChartData(ctx, chartID, chart.Config); err == nil {
+			return cached, nil
+		}
 	}
 
 	var config dto.ChartConfig
@@ -159,9 +167,15 @@ func (s *ChartService) GetData(ctx context.Context, chartID uint64) (*dto.ChartD
 		metricNames = append(metricNames, alias)
 	}
 
-	return &dto.ChartDataResponse{
+	resp := &dto.ChartDataResponse{
 		Dimensions: dimNames,
 		Metrics:    metricNames,
 		Data:       data,
-	}, nil
+	}
+
+	if s.cache != nil {
+		_ = s.cache.SetChartData(ctx, chartID, chart.Config, resp, 5*time.Minute)
+	}
+
+	return resp, nil
 }

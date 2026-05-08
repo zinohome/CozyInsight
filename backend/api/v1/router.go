@@ -30,7 +30,7 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 	rowPermHandler := handler.NewRowPermissionHandler(rowPermService)
 
 	chartRepo := repository.NewChartRepository(db)
-	chartService := service.NewChartService(chartRepo, datasetRepo, dsRepo)
+	chartService := service.NewChartService(chartRepo, datasetRepo, dsRepo, nil)
 	chartHandler := handler.NewChartHandler(chartService)
 
 	dashboardRepo := repository.NewDashboardRepository(db)
