@@ -4,6 +4,7 @@ import { Button, message, Modal, Select, Space } from 'antd'
 import { Responsive, WidthProvider } from 'react-grid-layout'
 import { dashboardAPI } from '@/api/dashboard'
 import { chartAPI } from '@/api/chart'
+import { exportAPI } from '@/api/export'
 import ChartRenderer from '@/components/ChartRenderer'
 import type { Dashboard } from '@/types/dashboard'
 import type { Chart, ChartDataResponse } from '@/types/chart'
@@ -147,9 +148,12 @@ export default function DashboardDesigner() {
         >
           {items.map(item => (
             <div key={item.instanceId} style={{ background: '#fff', borderRadius: 4, boxShadow: '0 1px 4px rgba(0,0,0,0.1)' }}>
-              <div style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between' }}>
+              <div style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontWeight: 'bold' }}>{item.chart?.title || '图表'}</span>
-                <Button type="text" size="small" danger onClick={() => handleRemoveChart(item.instanceId)}>移除</Button>
+                <Space>
+                  <Button type="text" size="small" onClick={() => exportAPI.downloadCSV(item.chartId)}>导出 CSV</Button>
+                  <Button type="text" size="small" danger onClick={() => handleRemoveChart(item.instanceId)}>移除</Button>
+                </Space>
               </div>
               <div style={{ padding: 8, height: 'calc(100% - 40px)' }}>
                 {item.data ? (

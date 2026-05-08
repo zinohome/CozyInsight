@@ -32,6 +32,7 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 	chartRepo := repository.NewChartRepository(db)
 	chartService := service.NewChartService(chartRepo, datasetRepo, dsRepo, nil)
 	chartHandler := handler.NewChartHandler(chartService)
+	exportHandler := handler.NewExportHandler(chartService)
 
 	dashboardRepo := repository.NewDashboardRepository(db)
 	dashboardService := service.NewDashboardService(dashboardRepo)
@@ -69,6 +70,7 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 			authd.PUT("/chart/:id", chartHandler.Update)
 			authd.DELETE("/chart/:id", chartHandler.Delete)
 			authd.GET("/chart/:id/data", chartHandler.GetData)
+			authd.GET("/chart/:id/export/csv", exportHandler.ExportCSV)
 
 			authd.GET("/dashboard", dashboardHandler.List)
 			authd.POST("/dashboard", dashboardHandler.Create)
