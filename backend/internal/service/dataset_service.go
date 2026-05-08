@@ -160,17 +160,17 @@ func (s *DatasetService) PreviewData(ctx context.Context, id uint64, limit uint6
 		return nil, err
 	}
 
-	// TODO: 行级权限过滤（当前未接入真实用户属性系统）
-	// rowFilter, _ := s.buildRowFilter(ctx, id, map[string]string{"dept_id": "1"})
-	// if rowFilter != "" {
-	//     // 将 rowFilter 注入 SQL WHERE
-	// }
+	// Apply row-level permissions
+	rowFilter, err := s.buildRowFilter(ctx, id, map[string]string{"dept_id": "1"})
+	if err != nil {
+		return nil, fmt.Errorf("build row filter failed: %w", err)
+	}
 
 	var data []map[string]interface{}
 	if ds.Type == "sql" {
 		data, err = s.querySQLData(ctx, datasource, ds.SQL, limit)
 	} else {
-		data, err = s.queryTableData(ctx, datasource, ds.DatabaseName, ds.TableName, limit)
+		data, err = s.queryTableDataWithFilter(ctx, datasource, ds.DatabaseName, ds.TableName, limit, rowFilter)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("query data failed: %w", err)
@@ -247,6 +247,39 @@ func (s *DatasetService) queryTableData(ctx context.Context, ds *model.Datasourc
 	}
 	query := fmt.Sprintf("SELECT * FROM %s LIMIT %d", tableRef, limit)
 	return conn.Query(ctx, query)
+}
+
+func (s *DatasetService) queryTableDataWithFilter(ctx context.Context, ds *model.Datasource, dbName, tableName string, limit uint64, rowFilter []RowFilterCondition) ([]map[string]interface{}, error) {
+	conn, err := s.newConnector(ds.Type)
+	if err != nil {
+		return nil, fmt.Errorf("create connector failed: %w", err)
+	}
+	defer conn.Close()
+	if err := conn.Connect(ds.Config); err != nil {
+		return nil, fmt.Errorf("connect failed: %w", err)
+	}
+
+	var tableRef string
+	if dbName != "" {
+		tableRef = fmt.Sprintf("%s.%s", engine.QuoteIdentifier(dbName, ds.Type), engine.QuoteIdentifier(tableName, ds.Type))
+	} else {
+		tableRef = engine.QuoteIdentifier(tableName, ds.Type)
+	}
+
+	query := fmt.Sprintf("SELECT * FROM %s", tableRef)
+
+	var args []interface{}
+	if len(rowFilter) > 0 {
+		var conditions []string
+		for _, f := range rowFilter {
+			conditions = append(conditions, fmt.Sprintf("%s %s ?", engine.QuoteIdentifier(f.FieldName, ds.Type), f.Operator))
+			args = append(args, f.Value)
+		}
+		query += " WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	query += fmt.Sprintf(" LIMIT %d", limit)
+	return conn.Query(ctx, query, args...)
 }
 
 func (s *DatasetService) getSQLColumns(ctx context.Context, ds *model.Datasource, sql string) ([]columnInfo, error) {
