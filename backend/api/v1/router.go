@@ -59,6 +59,7 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 			authd.PUT("/datasource/:id", dsHandler.Update)
 			authd.DELETE("/datasource/:id", dsHandler.Delete)
 			authd.POST("/datasource/test", dsHandler.TestConnection)
+				authd.POST("/datasource/upload", dsHandler.UploadFile)
 
 			authd.GET("/dataset", datasetHandler.List)
 			authd.POST("/dataset", datasetHandler.Create)

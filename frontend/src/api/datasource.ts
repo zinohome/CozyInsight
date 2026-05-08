@@ -8,4 +8,7 @@ export const datasourceAPI = {
   update: (id: number, data: Partial<CreateDatasourceRequest>) => request.put(`/api/v1/datasource/${id}`, data),
   remove: (id: number) => request.delete(`/api/v1/datasource/${id}`),
   testConnection: (data: TestConnectionRequest) => request.post('/api/v1/datasource/test', data),
+  upload: (formData: FormData) => request.post<Datasource>('/api/v1/datasource/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
 }

@@ -18,8 +18,8 @@ func NewDatasourceRepository(db *sqlx.DB) *DatasourceRepository {
 }
 
 func (r *DatasourceRepository) Create(ctx context.Context, ds *model.Datasource) error {
-	query := `INSERT INTO datasources (name, type, config, status, created_by)
-			  VALUES (:name, :type, :config, :status, :created_by)`
+	query := `INSERT INTO datasources (name, type, config, file_path, file_type, status, created_by)
+			  VALUES (:name, :type, :config, :file_path, :file_type, :status, :created_by)`
 	result, err := r.db.NamedExecContext(ctx, query, ds)
 	if err != nil {
 		return fmt.Errorf("create datasource failed: %w", err)
@@ -48,7 +48,7 @@ func (r *DatasourceRepository) List(ctx context.Context) ([]model.Datasource, er
 }
 
 func (r *DatasourceRepository) Update(ctx context.Context, ds *model.Datasource) error {
-	query := `UPDATE datasources SET name = :name, type = :type, config = :config, status = :status WHERE id = :id`
+	query := `UPDATE datasources SET name = :name, type = :type, config = :config, file_path = :file_path, file_type = :file_type, status = :status WHERE id = :id`
 	if _, err := r.db.NamedExecContext(ctx, query, ds); err != nil {
 		return fmt.Errorf("update datasource failed: %w", err)
 	}

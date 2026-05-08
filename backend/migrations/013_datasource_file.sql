@@ -1,0 +1,2 @@
+ALTER TABLE datasources ADD COLUMN file_path VARCHAR(512) DEFAULT NULL AFTER config;
+ALTER TABLE datasources ADD COLUMN file_type VARCHAR(32) DEFAULT NULL AFTER file_path;

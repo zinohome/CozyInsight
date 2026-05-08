@@ -27,7 +27,6 @@ func NewDatasourceService(repo *repository.DatasourceRepository, pool *engine.Co
 }
 
 func (s *DatasourceService) Create(ctx context.Context, req *dto.CreateDatasourceRequest, userID uint64) (*model.Datasource, error) {
-	// 校验 config 是合法 JSON
 	var cfg map[string]interface{}
 	if err := json.Unmarshal([]byte(req.Config), &cfg); err != nil {
 		return nil, fmt.Errorf("invalid config json: %w", err)
@@ -39,6 +38,13 @@ func (s *DatasourceService) Create(ctx context.Context, req *dto.CreateDatasourc
 		Config:    req.Config,
 		Status:    1,
 		CreatedBy: userID,
+	}
+
+	if req.Type == "excel" || req.Type == "csv" {
+		filePath, _ := cfg["file_path"].(string)
+		fileType, _ := cfg["file_type"].(string)
+		ds.FilePath = filePath
+		ds.FileType = fileType
 	}
 
 	if err := s.repo.Create(ctx, ds); err != nil {
@@ -123,6 +129,21 @@ func (s *DatasourceService) TestConnection(ctx context.Context, req *dto.TestCon
 		password, _ := req.Config["password"].(string)
 		database, _ := req.Config["database"].(string)
 		dsn = fmt.Sprintf("clickhouse://%s:%s@%s:%.0f/%s", username, password, host, port, database)
+	case "excel", "csv":
+		filePath, _ := req.Config["file_path"].(string)
+		if filePath == "" {
+			return fmt.Errorf("missing file_path for file datasource")
+		}
+		conn, err := engine.NewConnector(req.Type)
+		if err != nil {
+			return fmt.Errorf("create connector failed: %w", err)
+		}
+		defer conn.Close()
+		configJSON, _ := json.Marshal(req.Config)
+		if err := conn.Connect(string(configJSON)); err != nil {
+			return fmt.Errorf("connect failed: %w", err)
+		}
+		return nil
 	default:
 		return fmt.Errorf("unsupported datasource type: %s", req.Type)
 	}

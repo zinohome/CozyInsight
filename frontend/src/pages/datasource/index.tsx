@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Table, Button, Space, Tag, Modal, Form, Input, Select, message } from 'antd'
+import { Table, Button, Space, Tag, Modal, Form, Input, Select, message, Upload, Tabs } from 'antd'
+import { UploadOutlined } from '@ant-design/icons'
 import { datasourceAPI } from '@/api/datasource'
 import type { Datasource } from '@/types/datasource'
 
@@ -7,6 +8,7 @@ export default function DatasourcePage() {
   const [list, setList] = useState<Datasource[]>([])
   const [loading, setLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
+  const [modalTab, setModalTab] = useState('database')
   const [form] = Form.useForm()
 
   const fetchList = async () => {
@@ -34,6 +36,20 @@ export default function DatasourcePage() {
       fetchList()
     } catch {
       message.error('创建失败')
+    }
+  }
+
+  const handleUpload = async (file: File, type: 'excel' | 'csv') => {
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('type', type)
+      await datasourceAPI.upload(formData)
+      message.success('上传成功')
+      setModalVisible(false)
+      fetchList()
+    } catch {
+      message.error('上传失败')
     }
   }
 
@@ -68,21 +84,40 @@ export default function DatasourcePage() {
         <Button type="primary" onClick={() => setModalVisible(true)}>新建数据源</Button>
       </div>
       <Table rowKey="id" columns={columns} dataSource={list} loading={loading} />
-      <Modal title="新建数据源" open={modalVisible} onCancel={() => setModalVisible(false)} footer={null}>
-        <Form form={form} onFinish={handleCreate} layout="vertical">
-          <Form.Item name="name" label="名称" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="type" label="类型" rules={[{ required: true }]}>
-            <Select options={[{ value: 'mysql', label: 'MySQL' }, { value: 'postgresql', label: 'PostgreSQL' }]} />
-          </Form.Item>
-          <Form.Item name="config" label="配置 (JSON)" rules={[{ required: true }]}>
-            <Input.TextArea rows={4} placeholder='{"host":"localhost","port":3306,...}' />
-          </Form.Item>
-          <Form.Item>
-            <Button type="primary" htmlType="submit">创建</Button>
-          </Form.Item>
-        </Form>
+      <Modal title="新建数据源" open={modalVisible} onCancel={() => { setModalVisible(false); form.resetFields() }} footer={null}>
+        <Tabs activeKey={modalTab} onChange={setModalTab}>
+          <Tabs.TabPane tab="数据库" key="database">
+            <Form form={form} onFinish={handleCreate} layout="vertical">
+              <Form.Item name="name" label="名称" rules={[{ required: true }]}>
+                <Input />
+              </Form.Item>
+              <Form.Item name="type" label="类型" rules={[{ required: true }]}>
+                <Select options={[{ value: 'mysql', label: 'MySQL' }, { value: 'postgresql', label: 'PostgreSQL' }]} />
+              </Form.Item>
+              <Form.Item name="config" label="配置 (JSON)" rules={[{ required: true }]}>
+                <Input.TextArea rows={4} placeholder='{"host":"localhost","port":3306,...}' />
+              </Form.Item>
+              <Form.Item>
+                <Button type="primary" htmlType="submit">创建</Button>
+              </Form.Item>
+            </Form>
+          </Tabs.TabPane>
+          <Tabs.TabPane tab="文件上传" key="file">
+            <Upload
+              accept=".xlsx,.xls,.csv"
+              beforeUpload={(file) => {
+                const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase()
+                const type = ext === '.csv' ? 'csv' : 'excel'
+                handleUpload(file, type as 'excel' | 'csv')
+                return false
+              }}
+              showUploadList={false}
+            >
+              <Button icon={<UploadOutlined />}>点击上传 Excel/CSV</Button>
+            </Upload>
+            <p style={{ marginTop: 8, color: '#888' }}>支持 .xlsx、.xls、.csv 格式</p>
+          </Tabs.TabPane>
+        </Tabs>
       </Modal>
     </div>
   )

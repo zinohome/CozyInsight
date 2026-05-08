@@ -41,6 +41,8 @@ func NewConnector(dsType string) (DatasourceConnector, error) {
 		return &sqliteConnector{}, nil
 	case "clickhouse":
 		return &clickhouseConnector{}, nil
+	case "excel", "csv":
+		return &fileConnector{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported datasource type: %s", dsType)
 	}
