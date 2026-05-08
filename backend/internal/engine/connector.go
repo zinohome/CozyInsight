@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"strconv"
 
+	_ "github.com/ClickHouse/clickhouse-go/v2"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 // DatasourceConnector abstracts connections to external databases.
@@ -35,6 +37,10 @@ func NewConnector(dsType string) (DatasourceConnector, error) {
 		return &mysqlConnector{}, nil
 	case "postgresql":
 		return &postgresqlConnector{}, nil
+	case "sqlite":
+		return &sqliteConnector{}, nil
+	case "clickhouse":
+		return &clickhouseConnector{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported datasource type: %s", dsType)
 	}
@@ -72,6 +78,9 @@ func (c *mysqlConnector) buildDSN(configJSON string) (string, error) {
 }
 
 func (c *mysqlConnector) Connect(configJSON string) error {
+	if c.db != nil {
+		return nil // already connected
+	}
 	dsn, err := c.buildDSN(configJSON)
 	if err != nil {
 		return err
@@ -89,10 +98,12 @@ func (c *mysqlConnector) Connect(configJSON string) error {
 }
 
 func (c *mysqlConnector) Close() error {
-	if c.db != nil {
-		return c.db.Close()
+	if c.db == nil {
+		return nil
 	}
-	return nil
+	err := c.db.Close()
+	c.db = nil
+	return err
 }
 
 func (c *mysqlConnector) Query(ctx context.Context, query string, args ...interface{}) ([]map[string]interface{}, error) {
@@ -182,6 +193,9 @@ func (c *postgresqlConnector) buildDSN(configJSON string) (string, error) {
 }
 
 func (c *postgresqlConnector) Connect(configJSON string) error {
+	if c.db != nil {
+		return nil // already connected
+	}
 	dsn, err := c.buildDSN(configJSON)
 	if err != nil {
 		return err
@@ -199,10 +213,12 @@ func (c *postgresqlConnector) Connect(configJSON string) error {
 }
 
 func (c *postgresqlConnector) Close() error {
-	if c.db != nil {
-		return c.db.Close()
+	if c.db == nil {
+		return nil
 	}
-	return nil
+	err := c.db.Close()
+	c.db = nil
+	return err
 }
 
 func (c *postgresqlConnector) Query(ctx context.Context, query string, args ...interface{}) ([]map[string]interface{}, error) {
@@ -248,6 +264,180 @@ func (c *postgresqlConnector) GetColumns(ctx context.Context, dbName, tableName 
 		if scale.Valid {
 			col.Scale = int(scale.Int64)
 		}
+		cols = append(cols, col)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("row iteration failed: %w", err)
+	}
+	return cols, nil
+}
+
+type sqliteConnector struct {
+	db *sql.DB
+}
+
+func (c *sqliteConnector) Connect(configJSON string) error {
+	if c.db != nil {
+		return nil
+	}
+	var cfg map[string]interface{}
+	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
+		return fmt.Errorf("invalid config json: %w", err)
+	}
+	dbName, ok := cfg["database"].(string)
+	if !ok || dbName == "" {
+		return fmt.Errorf("missing or invalid required field: database")
+	}
+	db, err := sql.Open("sqlite3", dbName)
+	if err != nil {
+		return fmt.Errorf("open sqlite3 failed: %w", err)
+	}
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return fmt.Errorf("ping sqlite3 failed: %w", err)
+	}
+	c.db = db
+	return nil
+}
+
+func (c *sqliteConnector) Close() error {
+	if c.db == nil {
+		return nil
+	}
+	err := c.db.Close()
+	c.db = nil
+	return err
+}
+
+func (c *sqliteConnector) Query(ctx context.Context, query string, args ...interface{}) ([]map[string]interface{}, error) {
+	if c.db == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+	rows, err := c.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query failed: %w", err)
+	}
+	defer rows.Close()
+	return scanRows(rows)
+}
+
+func (c *sqliteConnector) GetColumns(ctx context.Context, dbName, tableName string) ([]ColumnInfo, error) {
+	if c.db == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+	query := `PRAGMA table_info(?)`
+	rows, err := c.db.QueryContext(ctx, query, tableName)
+	if err != nil {
+		return nil, fmt.Errorf("get columns failed: %w", err)
+	}
+	defer rows.Close()
+
+	var cols []ColumnInfo
+	for rows.Next() {
+		var col ColumnInfo
+		var cid int
+		var notNull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &col.Name, &col.Type, &notNull, &dflt, &pk); err != nil {
+			return nil, fmt.Errorf("scan column info failed: %w", err)
+		}
+		cols = append(cols, col)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("row iteration failed: %w", err)
+	}
+	return cols, nil
+}
+
+type clickhouseConnector struct {
+	db *sql.DB
+}
+
+func (c *clickhouseConnector) Connect(configJSON string) error {
+	if c.db != nil {
+		return nil
+	}
+	var cfg map[string]interface{}
+	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
+		return fmt.Errorf("invalid config json: %w", err)
+	}
+	host, ok := cfg["host"].(string)
+	if !ok || host == "" {
+		return fmt.Errorf("missing or invalid required field: host")
+	}
+	portF, ok := cfg["port"].(float64)
+	if !ok || portF <= 0 {
+		return fmt.Errorf("missing or invalid required field: port")
+	}
+	username, ok := cfg["username"].(string)
+	if !ok || username == "" {
+		return fmt.Errorf("missing or invalid required field: username")
+	}
+	password, _ := cfg["password"].(string)
+	database, ok := cfg["database"].(string)
+	if !ok || database == "" {
+		return fmt.Errorf("missing or invalid required field: database")
+	}
+	port := int(portF)
+	dsn := fmt.Sprintf("clickhouse://%s:%s@%s:%d/%s", username, password, host, port, database)
+	db, err := sql.Open("clickhouse", dsn)
+	if err != nil {
+		return fmt.Errorf("open clickhouse failed: %w", err)
+	}
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return fmt.Errorf("ping clickhouse failed: %w", err)
+	}
+	c.db = db
+	return nil
+}
+
+func (c *clickhouseConnector) Close() error {
+	if c.db == nil {
+		return nil
+	}
+	err := c.db.Close()
+	c.db = nil
+	return err
+}
+
+func (c *clickhouseConnector) Query(ctx context.Context, query string, args ...interface{}) ([]map[string]interface{}, error) {
+	if c.db == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+	rows, err := c.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query failed: %w", err)
+	}
+	defer rows.Close()
+	return scanRows(rows)
+}
+
+func (c *clickhouseConnector) GetColumns(ctx context.Context, dbName, tableName string) ([]ColumnInfo, error) {
+	if c.db == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+	query := `
+		SELECT name, type, 0, 0, 0
+		FROM system.columns
+		WHERE database = ? AND table = ?
+		ORDER BY position`
+	rows, err := c.db.QueryContext(ctx, query, dbName, tableName)
+	if err != nil {
+		return nil, fmt.Errorf("get columns failed: %w", err)
+	}
+	defer rows.Close()
+
+	var cols []ColumnInfo
+	for rows.Next() {
+		var col ColumnInfo
+		var length, prec, scale int
+		if err := rows.Scan(&col.Name, &col.Type, &length, &prec, &scale); err != nil {
+			return nil, fmt.Errorf("scan column info failed: %w", err)
+		}
+		col.Length = length
+		col.Precision = prec
+		col.Scale = scale
 		cols = append(cols, col)
 	}
 	if err := rows.Err(); err != nil {

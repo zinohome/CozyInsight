@@ -96,6 +96,16 @@ func (s *DatasourceService) TestConnection(ctx context.Context, req *dto.TestCon
 		database, _ := req.Config["database"].(string)
 		dsn = fmt.Sprintf("host=%s port=%.0f user=%s password=%s dbname=%s sslmode=disable",
 			host, port, username, password, database)
+	case "sqlite":
+		database, _ := req.Config["database"].(string)
+		dsn = database
+	case "clickhouse":
+		host, _ := req.Config["host"].(string)
+		port, _ := req.Config["port"].(float64)
+		username, _ := req.Config["username"].(string)
+		password, _ := req.Config["password"].(string)
+		database, _ := req.Config["database"].(string)
+		dsn = fmt.Sprintf("clickhouse://%s:%s@%s:%.0f/%s", username, password, host, port, database)
 	default:
 		return fmt.Errorf("unsupported datasource type: %s", req.Type)
 	}
