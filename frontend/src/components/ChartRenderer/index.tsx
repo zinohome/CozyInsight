@@ -1,4 +1,4 @@
-import { Bar, Line, Pie, Area, Scatter, Radar } from '@ant-design/charts'
+import { Bar, Line, Pie, Area, Scatter, Radar, Funnel, WordCloud, Sankey, Heatmap, Treemap, Gauge } from '@ant-design/charts'
 import { Table } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 
@@ -97,6 +97,68 @@ export default function ChartRenderer({ type, data, config, height = 300 }: Char
           autoFit
         />
       )
+    case 'funnel':
+      return (
+        <Funnel
+          data={data}
+          xField={xField}
+          yField={yField}
+          height={height}
+          autoFit
+        />
+      )
+    case 'wordcloud':
+      return (
+        <WordCloud
+          data={data}
+          wordField={xField}
+          weightField={yField}
+          height={height}
+          autoFit
+        />
+      )
+    case 'sankey':
+      return (
+        <Sankey
+          data={data}
+          sourceField={xField}
+          targetField={yField}
+          weightField={metrics[0]}
+          height={height}
+          autoFit
+        />
+      )
+    case 'heatmap':
+      return (
+        <Heatmap
+          data={data}
+          xField={xField}
+          yField={dimensions[1] || yField}
+          colorField={yField}
+          height={height}
+          autoFit
+        />
+      )
+    case 'treemap':
+      return (
+        <Treemap
+          data={data}
+          colorField={xField}
+          valueField={yField}
+          height={height}
+          autoFit
+        />
+      )
+    case 'gauge': {
+      const percent = Number(data[0]?.[yField]) || 0
+      return (
+        <Gauge
+          percent={percent}
+          height={height}
+          autoFit
+        />
+      )
+    }
     case 'table': {
       const cols: ColumnsType<Record<string, unknown>> = []
       for (const d of dimensions) {

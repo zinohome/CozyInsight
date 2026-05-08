@@ -172,6 +172,12 @@ export default function ChartBuilder() {
                 <Radio.Button value="pie">饼图</Radio.Button>
                 <Radio.Button value="scatter">散点图</Radio.Button>
                 <Radio.Button value="radar">雷达图</Radio.Button>
+                <Radio.Button value="funnel">漏斗图</Radio.Button>
+                <Radio.Button value="wordcloud">词云</Radio.Button>
+                <Radio.Button value="sankey">桑基图</Radio.Button>
+                <Radio.Button value="heatmap">热力图</Radio.Button>
+                <Radio.Button value="treemap">矩形树图</Radio.Button>
+                <Radio.Button value="gauge">仪表盘</Radio.Button>
                 <Radio.Button value="table">表格</Radio.Button>
               </Radio.Group>
             </div>
