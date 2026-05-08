@@ -1,5 +1,6 @@
 import { Routes, Route, useLocation } from 'react-router-dom'
 import LoginPage from '@/pages/login'
+import ShareView from '@/pages/share/ShareView'
 import DatasourcePage from '@/pages/datasource'
 import DatasetPage from '@/pages/dataset'
 import ChartPage from '@/pages/chart'
@@ -35,6 +36,10 @@ export default function AppRoutes() {
 
   if (location.pathname === '/login') {
     return <LoginPage />
+  }
+
+  if (location.pathname.startsWith('/share/')) {
+    return <ShareView />
   }
 
   return <LayoutRoutes />

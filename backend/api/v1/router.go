@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jmoiron/sqlx"
 
+	"cozy-insight/internal/engine"
 	"cozy-insight/internal/handler"
 	"cozy-insight/internal/middleware"
 	"cozy-insight/internal/repository"
@@ -22,15 +23,17 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 	dsService := service.NewDatasourceService(dsRepo)
 	dsHandler := handler.NewDatasourceHandler(dsService)
 
+	connectorPool := engine.NewConnectorPool()
+
 	datasetRepo := repository.NewDatasetRepository(db)
 	rowPermRepo := repository.NewRowPermissionRepository(db)
-	datasetService := service.NewDatasetService(datasetRepo, dsRepo, rowPermRepo)
+	datasetService := service.NewDatasetService(datasetRepo, dsRepo, rowPermRepo, connectorPool)
 	datasetHandler := handler.NewDatasetHandler(datasetService)
 	rowPermService := service.NewRowPermissionService(rowPermRepo)
 	rowPermHandler := handler.NewRowPermissionHandler(rowPermService)
 
 	chartRepo := repository.NewChartRepository(db)
-	chartService := service.NewChartService(chartRepo, datasetRepo, dsRepo, nil)
+	chartService := service.NewChartService(chartRepo, datasetRepo, dsRepo, nil, connectorPool)
 	chartHandler := handler.NewChartHandler(chartService)
 	exportHandler := handler.NewExportHandler(chartService)
 
@@ -38,10 +41,15 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 	dashboardService := service.NewDashboardService(dashboardRepo)
 	dashboardHandler := handler.NewDashboardHandler(dashboardService)
 
+	shareLinkRepo := repository.NewShareLinkRepository(db)
+	shareLinkService := service.NewShareLinkService(shareLinkRepo, dashboardRepo)
+	shareHandler := handler.NewShareHandler(shareLinkService)
+
 	api := r.Group("/api/v1")
 	{
 		api.POST("/auth/register", authHandler.Register)
 		api.POST("/auth/login", authHandler.Login)
+		api.GET("/share/:token", shareHandler.GetDashboard)
 
 		authd := api.Group("/")
 		authd.Use(middleware.JWTAuth(jwtManager))
