@@ -205,12 +205,12 @@ func TestDatasetHandler_SyncFields(t *testing.T) {
 func TestDatasetHandler_Preview(t *testing.T) {
 	r, mock := setupDatasetHandler(t)
 
-	dsColumns := []string{"id", "name", "datasource_id", "database_name", "table_name", "type", "mode", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	dsColumns := []string{"id", "name", "datasource_id", "database_name", "table_name", "sql", "type", "mode", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	dsNow := time.Now()
 	mock.ExpectQuery("SELECT \\* FROM datasets WHERE id = \\? AND deleted_at IS NULL").
 		WithArgs(1).
 		WillReturnRows(sqlmock.NewRows(dsColumns).AddRow(
-			1, "Test Dataset", 1, "test_db", "test_table", "table", 0, 1, 1, dsNow, dsNow, nil,
+			1, "Test Dataset", 1, "test_db", "test_table", "", "table", 0, 1, 1, dsNow, dsNow, nil,
 		))
 
 	datasourceColumns := []string{"id", "name", "type", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
@@ -224,6 +224,11 @@ func TestDatasetHandler_Preview(t *testing.T) {
 	mock.ExpectQuery("SELECT \\* FROM dataset_fields WHERE dataset_id = \\?").
 		WithArgs(1).
 		WillReturnRows(sqlmock.NewRows(fieldColumns))
+
+	rowPermColumns := []string{"id", "dataset_id", "field_name", "operator", "value", "user_attr", "status", "created_at", "updated_at"}
+	mock.ExpectQuery("SELECT \\* FROM row_permissions WHERE dataset_id = \\? AND status = 1").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(rowPermColumns))
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/dataset/1/preview?limit=10", nil)
