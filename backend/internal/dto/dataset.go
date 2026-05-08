@@ -6,6 +6,7 @@ type CreateDatasetRequest struct {
 	DatasourceID uint64 `json:"datasourceId" binding:"required"`
 	DatabaseName string `json:"databaseName"`
 	TableName    string `json:"tableName" binding:"required"`
+	SQL          string `json:"sql"`
 	Type         string `json:"type" binding:"required"`
 	Mode         int8   `json:"mode"`
 }
@@ -16,6 +17,7 @@ type UpdateDatasetRequest struct {
 	DatasourceID *uint64 `json:"datasourceId"`
 	DatabaseName string  `json:"databaseName"`
 	TableName    string  `json:"tableName"`
+	SQL          string  `json:"sql"`
 	Type         string  `json:"type"`
 	Mode         *int8   `json:"mode"`
 	Status       *int8   `json:"status"`

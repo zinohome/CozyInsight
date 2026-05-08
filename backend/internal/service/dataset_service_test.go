@@ -51,17 +51,39 @@ func TestDatasetService_Create(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestDatasetService_Create_SQLDataset(t *testing.T) {
+	db, mock := testutil.NewMockDB(t)
+	repo := repository.NewDatasetRepository(db)
+	svc := NewDatasetService(repo, nil, nil)
+
+	mock.ExpectExec("INSERT INTO datasets").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	result, err := svc.Create(context.Background(), &dto.CreateDatasetRequest{
+		Name:         "SQL Dataset",
+		DatasourceID: 1,
+		TableName:    "orders",
+		SQL:          "SELECT * FROM orders",
+		Type:         "sql",
+	}, 1)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(1), result.ID)
+	assert.Equal(t, "SQL Dataset", result.Name)
+	assert.Equal(t, "SELECT * FROM orders", result.SQL)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestDatasetService_GetByID(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDatasetRepository(db)
 	svc := NewDatasetService(repo, nil, nil)
 
-	columns := []string{"id", "name", "datasource_id", "database_name", "table_name", "type", "mode", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	columns := []string{"id", "name", "datasource_id", "database_name", "table_name", "sql", "type", "mode", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
 	mock.ExpectQuery("SELECT \\* FROM datasets WHERE id = \\? AND deleted_at IS NULL").
 		WithArgs(1).
 		WillReturnRows(sqlmock.NewRows(columns).AddRow(
-			1, "Test", 1, "db", "users", "table", 0, 1, 1, now, now, nil,
+			1, "Test", 1, "db", "users", "", "table", 0, 1, 1, now, now, nil,
 		))
 
 	ds, err := svc.GetByID(context.Background(), 1)
@@ -94,11 +116,11 @@ func TestDatasetService_List(t *testing.T) {
 	repo := repository.NewDatasetRepository(db)
 	svc := NewDatasetService(repo, nil, nil)
 
-	columns := []string{"id", "name", "datasource_id", "database_name", "table_name", "type", "mode", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	columns := []string{"id", "name", "datasource_id", "database_name", "table_name", "sql", "type", "mode", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
 	mock.ExpectQuery("SELECT \\* FROM datasets WHERE deleted_at IS NULL ORDER BY created_at DESC").
 		WillReturnRows(sqlmock.NewRows(columns).AddRow(
-			1, "Test", 1, "db", "users", "table", 0, 1, 1, now, now, nil,
+			1, "Test", 1, "db", "users", "", "table", 0, 1, 1, now, now, nil,
 		))
 
 	list, err := svc.List(context.Background())
@@ -112,12 +134,12 @@ func TestDatasetService_Update(t *testing.T) {
 	repo := repository.NewDatasetRepository(db)
 	svc := NewDatasetService(repo, nil, nil)
 
-	columns := []string{"id", "name", "datasource_id", "database_name", "table_name", "type", "mode", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	columns := []string{"id", "name", "datasource_id", "database_name", "table_name", "sql", "type", "mode", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
 	mock.ExpectQuery("SELECT \\* FROM datasets WHERE id = \\? AND deleted_at IS NULL").
 		WithArgs(1).
 		WillReturnRows(sqlmock.NewRows(columns).AddRow(
-			1, "Old", 1, "db", "users", "table", 0, 1, 1, now, now, nil,
+			1, "Old", 1, "db", "users", "", "table", 0, 1, 1, now, now, nil,
 		))
 
 	mock.ExpectExec("UPDATE datasets SET").
@@ -237,4 +259,42 @@ func TestDatasetService_queryTableData_ConnectorError(t *testing.T) {
 	_, err := svc.queryTableData(context.Background(), &model.Datasource{Type: "oracle", Config: "{}"}, "db", "users", 10)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "create connector failed")
+}
+
+func TestDatasetService_SyncFields_SQL(t *testing.T) {
+	db, mock := testutil.NewMockDB(t)
+	repo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	svc := NewDatasetService(repo, dsRepo, nil)
+
+	columns := []string{"id", "name", "datasource_id", "database_name", "table_name", "sql", "type", "mode", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	now := time.Now()
+	mock.ExpectQuery("SELECT \\* FROM datasets WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(columns).AddRow(
+			1, "SQL Dataset", 1, "", "", "SELECT id, name FROM orders", "sql", 0, 1, 1, now, now, nil,
+		))
+
+	dsColumns := []string{"id", "name", "type", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	mock.ExpectQuery("SELECT \\* FROM datasources WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(dsColumns).AddRow(
+			1, "MySQL", "mysql", "{}", 1, 1, now, now, nil,
+		))
+
+	mock.ExpectExec("DELETE FROM dataset_fields").
+		WithArgs(1).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	mock.ExpectExec("INSERT INTO dataset_fields").
+		WillReturnResult(sqlmock.NewResult(0, 2))
+
+	mockConn := &mockConnector{data: []map[string]interface{}{
+		{"id": 1, "name": "Alice"},
+	}}
+	svc.SetConnectorFactory(func(string) (engine.DatasourceConnector, error) { return mockConn, nil })
+
+	err := svc.SyncFields(context.Background(), 1)
+	require.NoError(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
 }

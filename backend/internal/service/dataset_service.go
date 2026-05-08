@@ -38,6 +38,7 @@ func (s *DatasetService) Create(ctx context.Context, req *dto.CreateDatasetReque
 		DatasourceID: req.DatasourceID,
 		DatabaseName: req.DatabaseName,
 		TableName:    req.TableName,
+		SQL:          req.SQL,
 		Type:         req.Type,
 		Mode:         req.Mode,
 		Status:       1,
@@ -76,6 +77,9 @@ func (s *DatasetService) Update(ctx context.Context, id uint64, req *dto.UpdateD
 	if req.TableName != "" {
 		ds.TableName = req.TableName
 	}
+	if req.SQL != "" {
+		ds.SQL = req.SQL
+	}
 	if req.Type != "" {
 		ds.Type = req.Type
 	}
@@ -104,9 +108,14 @@ func (s *DatasetService) SyncFields(ctx context.Context, id uint64) error {
 		return fmt.Errorf("datasource not found: %w", err)
 	}
 
-	columns, err := s.getTableColumns(ctx, datasource, ds.DatabaseName, ds.TableName)
+	var columns []columnInfo
+	if ds.Type == "sql" {
+		columns, err = s.getSQLColumns(ctx, datasource, ds.SQL)
+	} else {
+		columns, err = s.getTableColumns(ctx, datasource, ds.DatabaseName, ds.TableName)
+	}
 	if err != nil {
-		return fmt.Errorf("get table columns failed: %w", err)
+		return fmt.Errorf("get columns failed: %w", err)
 	}
 
 	if err := s.repo.DeleteFields(ctx, id); err != nil {
@@ -157,9 +166,14 @@ func (s *DatasetService) PreviewData(ctx context.Context, id uint64, limit uint6
 	//     // 将 rowFilter 注入 SQL WHERE
 	// }
 
-	data, err := s.queryTableData(ctx, datasource, ds.DatabaseName, ds.TableName, limit)
+	var data []map[string]interface{}
+	if ds.Type == "sql" {
+		data, err = s.querySQLData(ctx, datasource, ds.SQL, limit)
+	} else {
+		data, err = s.queryTableData(ctx, datasource, ds.DatabaseName, ds.TableName, limit)
+	}
 	if err != nil {
-		return nil, fmt.Errorf("query table data failed: %w", err)
+		return nil, fmt.Errorf("query data failed: %w", err)
 	}
 
 	var fieldResp []dto.DatasetFieldResponse
@@ -233,6 +247,54 @@ func (s *DatasetService) queryTableData(ctx context.Context, ds *model.Datasourc
 	}
 	query := fmt.Sprintf("SELECT * FROM %s LIMIT %d", tableRef, limit)
 	return conn.Query(ctx, query)
+}
+
+func (s *DatasetService) getSQLColumns(ctx context.Context, ds *model.Datasource, sql string) ([]columnInfo, error) {
+	conn, err := s.newConnector(ds.Type)
+	if err != nil {
+		return nil, fmt.Errorf("create connector failed: %w", err)
+	}
+	defer conn.Close()
+	if err := conn.Connect(ds.Config); err != nil {
+		return nil, fmt.Errorf("connect failed: %w", err)
+	}
+	wrappedSQL := fmt.Sprintf("SELECT * FROM (%s) AS t LIMIT 0", sql)
+	data, err := conn.Query(ctx, wrappedSQL)
+	if err != nil {
+		return nil, fmt.Errorf("query sql failed: %w", err)
+	}
+	if len(data) == 0 {
+		wrappedSQL = fmt.Sprintf("SELECT * FROM (%s) AS t LIMIT 1", sql)
+		data, err = conn.Query(ctx, wrappedSQL)
+		if err != nil {
+			return nil, fmt.Errorf("query sql with limit 1 failed: %w", err)
+		}
+	}
+	if len(data) == 0 {
+		return nil, fmt.Errorf("sql returned no columns")
+	}
+	var result []columnInfo
+	for key := range data[0] {
+		result = append(result, columnInfo{
+			Name:   key,
+			Type:   "VARCHAR",
+			Length: 255,
+		})
+	}
+	return result, nil
+}
+
+func (s *DatasetService) querySQLData(ctx context.Context, ds *model.Datasource, sql string, limit uint64) ([]map[string]interface{}, error) {
+	conn, err := s.newConnector(ds.Type)
+	if err != nil {
+		return nil, fmt.Errorf("create connector failed: %w", err)
+	}
+	defer conn.Close()
+	if err := conn.Connect(ds.Config); err != nil {
+		return nil, fmt.Errorf("connect failed: %w", err)
+	}
+	wrappedSQL := fmt.Sprintf("SELECT * FROM (%s) AS t LIMIT %d", sql, limit)
+	return conn.Query(ctx, wrappedSQL)
 }
 
 func (s *DatasetService) inferDeType(sqlType string) int8 {

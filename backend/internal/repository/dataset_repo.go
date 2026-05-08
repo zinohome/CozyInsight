@@ -18,8 +18,8 @@ func NewDatasetRepository(db *sqlx.DB) *DatasetRepository {
 }
 
 func (r *DatasetRepository) Create(ctx context.Context, ds *model.Dataset) error {
-	query := `INSERT INTO datasets (name, datasource_id, database_name, table_name, type, mode, status, created_by)
-			  VALUES (:name, :datasource_id, :database_name, :table_name, :type, :mode, :status, :created_by)`
+	query := `INSERT INTO datasets (name, datasource_id, database_name, table_name, sql, type, mode, status, created_by)
+			  VALUES (:name, :datasource_id, :database_name, :table_name, :sql, :type, :mode, :status, :created_by)`
 	result, err := r.db.NamedExecContext(ctx, query, ds)
 	if err != nil {
 		return fmt.Errorf("create dataset failed: %w", err)
@@ -49,7 +49,7 @@ func (r *DatasetRepository) List(ctx context.Context) ([]model.Dataset, error) {
 
 func (r *DatasetRepository) Update(ctx context.Context, ds *model.Dataset) error {
 	query := `UPDATE datasets SET name = :name, datasource_id = :datasource_id, database_name = :database_name,
-			  table_name = :table_name, type = :type, mode = :mode, status = :status WHERE id = :id`
+			  table_name = :table_name, sql = :sql, type = :type, mode = :mode, status = :status WHERE id = :id`
 	if _, err := r.db.NamedExecContext(ctx, query, ds); err != nil {
 		return fmt.Errorf("update dataset failed: %w", err)
 	}

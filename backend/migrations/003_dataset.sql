@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS datasets (
     datasource_id BIGINT UNSIGNED NOT NULL,
     database_name VARCHAR(128) DEFAULT '',
     table_name VARCHAR(128) NOT NULL,
+    sql TEXT DEFAULT NULL,
     type VARCHAR(32) NOT NULL COMMENT 'db, sql, excel, api',
     mode TINYINT DEFAULT 0 COMMENT '0=直连, 1=抽取',
     status TINYINT DEFAULT 1 COMMENT '0=禁用, 1=启用',

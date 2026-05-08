@@ -8,6 +8,7 @@ type Dataset struct {
 	DatasourceID   uint64     `db:"datasource_id" json:"datasourceId"`
 	DatabaseName   string     `db:"database_name" json:"databaseName"`
 	TableName      string     `db:"table_name" json:"tableName"`
+	SQL            string     `db:"sql" json:"sql"`
 	Type           string     `db:"type" json:"type"`
 	Mode           int8       `db:"mode" json:"mode"`
 	Status         int8       `db:"status" json:"status"`
