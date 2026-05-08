@@ -18,8 +18,8 @@ func NewDashboardRepository(db *sqlx.DB) *DashboardRepository {
 }
 
 func (r *DashboardRepository) Create(ctx context.Context, d *model.Dashboard) error {
-	query := `INSERT INTO dashboards (title, config, status, created_by)
-			  VALUES (:title, :config, :status, :created_by)`
+	query := `INSERT INTO dashboards (title, config, share_token, share_enabled, status, created_by)
+			  VALUES (:title, :config, :share_token, :share_enabled, :status, :created_by)`
 	result, err := r.db.NamedExecContext(ctx, query, d)
 	if err != nil {
 		return fmt.Errorf("create dashboard failed: %w", err)
@@ -48,11 +48,20 @@ func (r *DashboardRepository) List(ctx context.Context) ([]model.Dashboard, erro
 }
 
 func (r *DashboardRepository) Update(ctx context.Context, d *model.Dashboard) error {
-	query := `UPDATE dashboards SET title = :title, config = :config, status = :status WHERE id = :id`
+	query := `UPDATE dashboards SET title = :title, config = :config, share_token = :share_token, share_enabled = :share_enabled, status = :status WHERE id = :id`
 	if _, err := r.db.NamedExecContext(ctx, query, d); err != nil {
 		return fmt.Errorf("update dashboard failed: %w", err)
 	}
 	return nil
+}
+
+func (r *DashboardRepository) FindByShareToken(ctx context.Context, token string) (*model.Dashboard, error) {
+	var d model.Dashboard
+	query := `SELECT * FROM dashboards WHERE share_token = ? AND deleted_at IS NULL`
+	if err := r.db.GetContext(ctx, &d, query, token); err != nil {
+		return nil, fmt.Errorf("find dashboard by share token failed: %w", err)
+	}
+	return &d, nil
 }
 
 func (r *DashboardRepository) Delete(ctx context.Context, id uint64) error {

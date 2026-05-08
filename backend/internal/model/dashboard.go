@@ -3,14 +3,16 @@ package model
 import "time"
 
 type Dashboard struct {
-	ID        uint64     `db:"id" json:"id"`
-	Title     string     `db:"title" json:"title"`
-	Config    string     `db:"config" json:"config"`
-	Status    int8       `db:"status" json:"status"`
-	CreatedBy uint64     `db:"created_by" json:"createdBy"`
-	CreatedAt time.Time  `db:"created_at" json:"createdAt"`
-	UpdatedAt time.Time  `db:"updated_at" json:"updatedAt"`
-	DeletedAt *time.Time `db:"deleted_at" json:"-"`
+	ID           uint64     `db:"id" json:"id"`
+	Title        string     `db:"title" json:"title"`
+	Config       string     `db:"config" json:"config"`
+	ShareToken   string     `db:"share_token" json:"shareToken"`
+	ShareEnabled int8       `db:"share_enabled" json:"shareEnabled"`
+	Status       int8       `db:"status" json:"status"`
+	CreatedBy    uint64     `db:"created_by" json:"createdBy"`
+	CreatedAt    time.Time  `db:"created_at" json:"createdAt"`
+	UpdatedAt    time.Time  `db:"updated_at" json:"updatedAt"`
+	DeletedAt    *time.Time `db:"deleted_at" json:"-"`
 }
 
 type DashboardChart struct {

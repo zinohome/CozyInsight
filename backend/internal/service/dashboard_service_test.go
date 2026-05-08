@@ -37,12 +37,12 @@ func TestDashboardService_GetByID(t *testing.T) {
 	repo := repository.NewDashboardRepository(db)
 	svc := NewDashboardService(repo)
 
-	columns := []string{"id", "title", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	columns := []string{"id", "title", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
 	mock.ExpectQuery("SELECT \\* FROM dashboards WHERE id = \\? AND deleted_at IS NULL").
 		WithArgs(1).
 		WillReturnRows(sqlmock.NewRows(columns).AddRow(
-			1, "Test Dashboard", "{}", 1, 1, now, now, nil,
+			1, "Test Dashboard", "{}", "", 0, 1, 1, now, now, nil,
 		))
 
 	d, err := svc.GetByID(context.Background(), 1)
@@ -57,12 +57,12 @@ func TestDashboardService_List(t *testing.T) {
 	repo := repository.NewDashboardRepository(db)
 	svc := NewDashboardService(repo)
 
-	columns := []string{"id", "title", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	columns := []string{"id", "title", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
 	mock.ExpectQuery("SELECT \\* FROM dashboards WHERE deleted_at IS NULL ORDER BY created_at DESC").
 		WillReturnRows(sqlmock.NewRows(columns).
-			AddRow(1, "Dashboard1", "{}", 1, 1, now, now, nil).
-			AddRow(2, "Dashboard2", "{}", 1, 1, now, now, nil))
+			AddRow(1, "Dashboard1", "{}", "", 0, 1, 1, now, now, nil).
+			AddRow(2, "Dashboard2", "{}", "", 0, 1, 1, now, now, nil))
 
 	list, err := svc.List(context.Background())
 	require.NoError(t, err)
@@ -75,12 +75,12 @@ func TestDashboardService_Update(t *testing.T) {
 	repo := repository.NewDashboardRepository(db)
 	svc := NewDashboardService(repo)
 
-	columns := []string{"id", "title", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	columns := []string{"id", "title", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
 	mock.ExpectQuery("SELECT \\* FROM dashboards WHERE id = \\? AND deleted_at IS NULL").
 		WithArgs(1).
 		WillReturnRows(sqlmock.NewRows(columns).AddRow(
-			1, "Old", "{}", 1, 1, now, now, nil,
+			1, "Old", "{}", "", 0, 1, 1, now, now, nil,
 		))
 
 	mock.ExpectExec("UPDATE dashboards SET").
@@ -91,7 +91,7 @@ func TestDashboardService_Update(t *testing.T) {
 		Title:  "Updated",
 		Config: `{"color":"blue"}`,
 		Status: &status,
-	})
+	}, 1)
 	require.NoError(t, err)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
@@ -101,11 +101,19 @@ func TestDashboardService_Delete(t *testing.T) {
 	repo := repository.NewDashboardRepository(db)
 	svc := NewDashboardService(repo)
 
+	columns := []string{"id", "title", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	now := time.Now()
+	mock.ExpectQuery("SELECT \\* FROM dashboards WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(columns).AddRow(
+			1, "Test", "{}", "", 0, 1, 1, now, now, nil,
+		))
+
 	mock.ExpectExec("UPDATE dashboards SET deleted_at = NOW").
 		WithArgs(1).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	err := svc.Delete(context.Background(), 1)
+	err := svc.Delete(context.Background(), 1, 1)
 	require.NoError(t, err)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
@@ -146,6 +154,87 @@ func TestDashboardService_GetCharts(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, list, 1)
 	assert.Equal(t, uint64(1), list[0].ChartID)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestDashboardService_Update_Forbidden(t *testing.T) {
+	db, mock := testutil.NewMockDB(t)
+	repo := repository.NewDashboardRepository(db)
+	svc := NewDashboardService(repo)
+
+	columns := []string{"id", "title", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	now := time.Now()
+	mock.ExpectQuery("SELECT \\* FROM dashboards WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(columns).AddRow(
+			1, "Old", "{}", "", 0, 1, 2, now, now, nil,
+		))
+
+	err := svc.Update(context.Background(), 1, &dto.UpdateDashboardRequest{
+		Title: "Updated",
+	}, 1)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "permission denied")
+}
+
+func TestDashboardService_Delete_Forbidden(t *testing.T) {
+	db, mock := testutil.NewMockDB(t)
+	repo := repository.NewDashboardRepository(db)
+	svc := NewDashboardService(repo)
+
+	columns := []string{"id", "title", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	now := time.Now()
+	mock.ExpectQuery("SELECT \\* FROM dashboards WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(columns).AddRow(
+			1, "Old", "{}", "", 0, 1, 2, now, now, nil,
+		))
+
+	err := svc.Delete(context.Background(), 1, 1)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "permission denied")
+}
+
+func TestDashboardService_EnableShare(t *testing.T) {
+	db, mock := testutil.NewMockDB(t)
+	repo := repository.NewDashboardRepository(db)
+	svc := NewDashboardService(repo)
+
+	columns := []string{"id", "title", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	now := time.Now()
+	mock.ExpectQuery("SELECT \\* FROM dashboards WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(columns).AddRow(
+			1, "Test", "{}", "", 0, 1, 1, now, now, nil,
+		))
+
+	mock.ExpectExec("UPDATE dashboards SET").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	token, err := svc.EnableShare(context.Background(), 1, 1)
+	require.NoError(t, err)
+	assert.NotEmpty(t, token)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestDashboardService_DisableShare(t *testing.T) {
+	db, mock := testutil.NewMockDB(t)
+	repo := repository.NewDashboardRepository(db)
+	svc := NewDashboardService(repo)
+
+	columns := []string{"id", "title", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	now := time.Now()
+	mock.ExpectQuery("SELECT \\* FROM dashboards WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(columns).AddRow(
+			1, "Test", "{}", "", 0, 1, 1, now, now, nil,
+		))
+
+	mock.ExpectExec("UPDATE dashboards SET").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	err := svc.DisableShare(context.Background(), 1, 1)
+	require.NoError(t, err)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 

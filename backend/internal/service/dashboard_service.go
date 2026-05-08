@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/google/uuid"
+
 	"cozy-insight/internal/dto"
 	"cozy-insight/internal/model"
 	"cozy-insight/internal/repository"
@@ -48,10 +50,13 @@ func (s *DashboardService) List(ctx context.Context) ([]model.Dashboard, error) 
 	return s.repo.List(ctx)
 }
 
-func (s *DashboardService) Update(ctx context.Context, id uint64, req *dto.UpdateDashboardRequest) error {
+func (s *DashboardService) Update(ctx context.Context, id uint64, req *dto.UpdateDashboardRequest, userID uint64) error {
 	d, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return err
+	}
+	if d.CreatedBy != userID {
+		return fmt.Errorf("permission denied: not owner")
 	}
 
 	if req.Title != "" {
@@ -67,8 +72,45 @@ func (s *DashboardService) Update(ctx context.Context, id uint64, req *dto.Updat
 	return s.repo.Update(ctx, d)
 }
 
-func (s *DashboardService) Delete(ctx context.Context, id uint64) error {
+func (s *DashboardService) Delete(ctx context.Context, id uint64, userID uint64) error {
+	d, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if d.CreatedBy != userID {
+		return fmt.Errorf("permission denied: not owner")
+	}
 	return s.repo.Delete(ctx, id)
+}
+
+func (s *DashboardService) EnableShare(ctx context.Context, id uint64, userID uint64) (string, error) {
+	d, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	if d.CreatedBy != userID {
+		return "", fmt.Errorf("permission denied: not owner")
+	}
+	if d.ShareToken == "" {
+		d.ShareToken = uuid.New().String()
+	}
+	d.ShareEnabled = 1
+	if err := s.repo.Update(ctx, d); err != nil {
+		return "", err
+	}
+	return d.ShareToken, nil
+}
+
+func (s *DashboardService) DisableShare(ctx context.Context, id uint64, userID uint64) error {
+	d, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if d.CreatedBy != userID {
+		return fmt.Errorf("permission denied: not owner")
+	}
+	d.ShareEnabled = 0
+	return s.repo.Update(ctx, d)
 }
 
 func (s *DashboardService) AddChart(ctx context.Context, dashboardID uint64, req *dto.AddChartToDashboardRequest) error {

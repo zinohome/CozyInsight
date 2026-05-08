@@ -88,6 +88,8 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 			authd.POST("/dashboard/:id/charts", dashboardHandler.AddChart)
 			authd.GET("/dashboard/:id/charts", dashboardHandler.GetCharts)
 			authd.DELETE("/dashboard/:id/charts/:chartId", dashboardHandler.RemoveChart)
+				authd.POST("/dashboard/:id/share", dashboardHandler.EnableShare)
+				authd.DELETE("/dashboard/:id/share", dashboardHandler.DisableShare)
 
 			userRepo := repository.NewUserRepository(db)
 			userService := service.NewUserService(userRepo)
