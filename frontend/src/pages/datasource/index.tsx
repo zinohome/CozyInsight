@@ -106,7 +106,16 @@ export default function DatasourcePage() {
             <Upload
               accept=".xlsx,.xls,.csv"
               beforeUpload={(file) => {
-                const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase()
+                const dot = file.name.lastIndexOf('.')
+                if (dot <= 0) {
+                  message.error('文件缺少扩展名')
+                  return false
+                }
+                const ext = file.name.slice(dot).toLowerCase()
+                if (!['.xlsx', '.xls', '.csv'].includes(ext)) {
+                  message.error('仅支持 .xlsx、.xls、.csv 格式')
+                  return false
+                }
                 const type = ext === '.csv' ? 'csv' : 'excel'
                 handleUpload(file, type as 'excel' | 'csv')
                 return false

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	_ "github.com/ClickHouse/clickhouse-go/v2"
 	_ "github.com/go-sql-driver/mysql"
@@ -90,11 +91,19 @@ func (s *DatasourceService) Update(ctx context.Context, id uint64, req *dto.Upda
 }
 
 func (s *DatasourceService) Delete(ctx context.Context, id uint64) error {
+	ds, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
 	if err := s.repo.Delete(ctx, id); err != nil {
 		return err
 	}
 	if s.connectorPool != nil {
 		s.connectorPool.Remove(id)
+	}
+	if ds.FilePath != "" {
+		_ = os.Remove(ds.FilePath)
 	}
 	return nil
 }
@@ -139,7 +148,10 @@ func (s *DatasourceService) TestConnection(ctx context.Context, req *dto.TestCon
 			return fmt.Errorf("create connector failed: %w", err)
 		}
 		defer conn.Close()
-		configJSON, _ := json.Marshal(req.Config)
+		configJSON, err := json.Marshal(req.Config)
+		if err != nil {
+			return fmt.Errorf("marshal config failed: %w", err)
+		}
 		if err := conn.Connect(string(configJSON)); err != nil {
 			return fmt.Errorf("connect failed: %w", err)
 		}

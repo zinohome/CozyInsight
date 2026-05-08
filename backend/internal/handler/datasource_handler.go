@@ -2,12 +2,14 @@ package handler
 
 import (
 	"encoding/json"
-	"fmt"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 
 	"cozy-insight/internal/dto"
 	"cozy-insight/internal/middleware"
@@ -112,16 +114,26 @@ func (h *DatasourceHandler) TestConnection(c *gin.Context) {
 }
 
 func (h *DatasourceHandler) UploadFile(c *gin.Context) {
-	file, header, err := c.Request.FormFile("file")
+	header, err := c.FormFile("file")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "error": "missing file"})
 		return
 	}
-	defer file.Close()
+
+	const maxFileSize = 100 << 20 // 100MB
+	if header.Size > maxFileSize {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "error": "file too large, max 100MB"})
+		return
+	}
 
 	ext := filepath.Ext(header.Filename)
 	if ext != ".xlsx" && ext != ".xls" && ext != ".csv" {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "error": "unsupported file type, only .xlsx, .xls, .csv are allowed"})
+		return
+	}
+
+	if !validateFileMagic(header, ext) {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "error": "file content does not match extension"})
 		return
 	}
 
@@ -131,7 +143,7 @@ func (h *DatasourceHandler) UploadFile(c *gin.Context) {
 		return
 	}
 
-	savePath := filepath.Join(uploadDir, fmt.Sprintf("%d%s", header.Size, ext))
+	savePath := filepath.Join(uploadDir, uuid.New().String()+ext)
 	if err := c.SaveUploadedFile(header, savePath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "error": "save file failed"})
 		return
@@ -151,7 +163,11 @@ func (h *DatasourceHandler) UploadFile(c *gin.Context) {
 		"file_path": savePath,
 		"file_type": fileType,
 	}
-	configJSON, _ := json.Marshal(config)
+	configJSON, err := json.Marshal(config)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "error": "marshal config failed"})
+		return
+	}
 
 	userID := middleware.GetUserID(c)
 	ds, err := h.service.Create(c.Request.Context(), &dto.CreateDatasourceRequest{
@@ -165,4 +181,33 @@ func (h *DatasourceHandler) UploadFile(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"code": 200, "data": ds})
+}
+
+func validateFileMagic(header *multipart.FileHeader, ext string) bool {
+	f, err := header.Open()
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+
+	buf := make([]byte, 8)
+	if _, err := io.ReadFull(f, buf); err != nil {
+		return false
+	}
+
+	switch ext {
+	case ".xlsx", ".xls":
+		// ZIP magic for xlsx, or OLE2 header for xls
+		return buf[0] == 0x50 && buf[1] == 0x4B && buf[2] == 0x03 && buf[3] == 0x04 ||
+			buf[0] == 0xD0 && buf[1] == 0xCF && buf[2] == 0x11 && buf[3] == 0xE0
+	case ".csv":
+		// CSV has no magic; accept if first bytes are printable text
+		for _, b := range buf {
+			if b == 0 {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }

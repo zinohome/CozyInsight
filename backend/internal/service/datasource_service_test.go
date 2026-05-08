@@ -122,6 +122,14 @@ func TestDatasourceService_Delete(t *testing.T) {
 	repo := repository.NewDatasourceRepository(db)
 	svc := NewDatasourceService(repo, nil)
 
+	columns := []string{"id", "name", "type", "config", "file_path", "file_type", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	now := time.Now()
+	mock.ExpectQuery("SELECT \\* FROM datasources WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(columns).AddRow(
+			1, "MySQL", "mysql", "{}", "", "", 1, 1, now, now, nil,
+		))
+
 	mock.ExpectExec("UPDATE datasources SET deleted_at = NOW").
 		WithArgs(1).
 		WillReturnResult(sqlmock.NewResult(0, 1))

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -37,6 +38,10 @@ func setupDatasourceHandler(t *testing.T) (*gin.Engine, sqlmock.Sqlmock) {
 	r.GET("/datasource/:id", h.Get)
 	r.PUT("/datasource/:id", h.Update)
 	r.DELETE("/datasource/:id", h.Delete)
+	r.POST("/datasource/upload", func(c *gin.Context) {
+		c.Set("userID", uint64(1))
+		h.UploadFile(c)
+	})
 
 	return r, mock
 }
@@ -105,6 +110,14 @@ func TestDatasourceHandler_List(t *testing.T) {
 
 func TestDatasourceHandler_Delete(t *testing.T) {
 	r, mock := setupDatasourceHandler(t)
+
+	columns := []string{"id", "name", "type", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	now := time.Now()
+	mock.ExpectQuery("SELECT (.+) FROM datasources WHERE id = (.+) AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(columns).AddRow(
+			1, "MySQL", "mysql", "{}", 1, 1, now, now, nil,
+		))
 
 	mock.ExpectExec("UPDATE datasources SET deleted_at = NOW").
 		WithArgs(1).
@@ -217,4 +230,65 @@ func TestDatasourceHandler_Delete_NotFound(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestDatasourceHandler_UploadFile_MissingFile(t *testing.T) {
+	r, _ := setupDatasourceHandler(t)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/datasource/upload", nil)
+	req.Header.Set("Content-Type", "multipart/form-data; boundary=----test")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestDatasourceHandler_UploadFile_UnsupportedType(t *testing.T) {
+	r, _ := setupDatasourceHandler(t)
+
+	body, contentType := buildMultipartForm(t, "test.txt", []byte("hello"))
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/datasource/upload", body)
+	req.Header.Set("Content-Type", contentType)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestDatasourceHandler_UploadFile_MagicMismatch(t *testing.T) {
+	r, _ := setupDatasourceHandler(t)
+
+	body, contentType := buildMultipartForm(t, "test.xlsx", []byte("not an excel file"))
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/datasource/upload", body)
+	req.Header.Set("Content-Type", contentType)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestDatasourceHandler_UploadFile_CSV_Success(t *testing.T) {
+	r, mock := setupDatasourceHandler(t)
+
+	mock.ExpectExec("INSERT INTO datasources").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	body, contentType := buildMultipartForm(t, "test.csv", []byte("name,age\nAlice,30\n"))
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/datasource/upload", body)
+	req.Header.Set("Content-Type", contentType)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func buildMultipartForm(t *testing.T, filename string, content []byte) (*bytes.Buffer, string) {
+	var b bytes.Buffer
+	writer := multipart.NewWriter(&b)
+	part, err := writer.CreateFormFile("file", filename)
+	require.NoError(t, err)
+	_, err = part.Write(content)
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+	return &b, writer.FormDataContentType()
 }

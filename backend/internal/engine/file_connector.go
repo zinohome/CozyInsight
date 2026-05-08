@@ -138,7 +138,7 @@ func parseExcelToSQLite(filePath string, db *sql.DB, tableName string) error {
 	headers := rows[0]
 	colDefs := make([]string, len(headers))
 	for i, h := range headers {
-		colDefs[i] = fmt.Sprintf("%s TEXT", QuoteIdentifier(sanitizeName(h), "sqlite"))
+		colDefs[i] = fmt.Sprintf("%s TEXT", QuoteIdentifier(sanitizeName(h, i), "sqlite"))
 	}
 
 	createSQL := fmt.Sprintf("CREATE TABLE %s (%s)", QuoteIdentifier(tableName, "sqlite"), strings.Join(colDefs, ", "))
@@ -192,7 +192,7 @@ func parseCSVToSQLite(filePath string, db *sql.DB, tableName string) error {
 	headers := records[0]
 	colDefs := make([]string, len(headers))
 	for i, h := range headers {
-		colDefs[i] = fmt.Sprintf("%s TEXT", QuoteIdentifier(sanitizeName(h), "sqlite"))
+		colDefs[i] = fmt.Sprintf("%s TEXT", QuoteIdentifier(sanitizeName(h, i), "sqlite"))
 	}
 
 	createSQL := fmt.Sprintf("CREATE TABLE %s (%s)", QuoteIdentifier(tableName, "sqlite"), strings.Join(colDefs, ", "))
@@ -227,12 +227,12 @@ func parseCSVToSQLite(filePath string, db *sql.DB, tableName string) error {
 	return nil
 }
 
-func sanitizeName(name string) string {
+func sanitizeName(name string, idx int) string {
 	name = strings.TrimSpace(name)
 	name = strings.ReplaceAll(name, " ", "_")
 	name = strings.ReplaceAll(name, "-", "_")
 	if name == "" {
-		name = "col" + strconv.Itoa(0)
+		name = "col" + strconv.Itoa(idx)
 	}
 	return name
 }

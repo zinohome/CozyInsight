@@ -150,7 +150,8 @@ export default function ChartRenderer({ type, data, config, height = 300 }: Char
         />
       )
     case 'gauge': {
-      const percent = Number(data[0]?.[yField]) || 0
+      let percent = Number(data[0]?.[yField]) || 0
+      percent = Math.max(0, Math.min(1, percent))
       return (
         <Gauge
           percent={percent}

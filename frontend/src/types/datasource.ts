@@ -3,6 +3,8 @@ export interface Datasource {
   name: string
   type: string
   config: string
+  filePath?: string
+  fileType?: string
   status: number
   createdBy: number
   createdAt: string

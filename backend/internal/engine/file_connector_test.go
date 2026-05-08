@@ -140,7 +140,9 @@ func TestFileConnector_EmptyExcel(t *testing.T) {
 }
 
 func TestSanitizeName(t *testing.T) {
-	assert.Equal(t, "hello_world", sanitizeName("hello world"))
-	assert.Equal(t, "hello_world", sanitizeName("hello-world"))
-	assert.Equal(t, "foo", sanitizeName("  foo  "))
+	assert.Equal(t, "hello_world", sanitizeName("hello world", 0))
+	assert.Equal(t, "hello_world", sanitizeName("hello-world", 1))
+	assert.Equal(t, "foo", sanitizeName("  foo  ", 2))
+	assert.Equal(t, "col0", sanitizeName("", 0))
+	assert.Equal(t, "col1", sanitizeName("", 1))
 }
