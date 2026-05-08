@@ -34,7 +34,7 @@ func (m *mockConnector) GetColumns(ctx context.Context, dbName, tableName string
 func TestDatasetService_Create(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDatasetRepository(db)
-	svc := NewDatasetService(repo, nil, nil)
+	svc := NewDatasetService(repo, nil, nil, nil)
 
 	mock.ExpectExec("INSERT INTO datasets").
 		WillReturnResult(sqlmock.NewResult(1, 1))
@@ -54,7 +54,7 @@ func TestDatasetService_Create(t *testing.T) {
 func TestDatasetService_Create_SQLDataset(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDatasetRepository(db)
-	svc := NewDatasetService(repo, nil, nil)
+	svc := NewDatasetService(repo, nil, nil, nil)
 
 	mock.ExpectExec("INSERT INTO datasets").
 		WillReturnResult(sqlmock.NewResult(1, 1))
@@ -76,7 +76,7 @@ func TestDatasetService_Create_SQLDataset(t *testing.T) {
 func TestDatasetService_GetByID(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDatasetRepository(db)
-	svc := NewDatasetService(repo, nil, nil)
+	svc := NewDatasetService(repo, nil, nil, nil)
 
 	columns := []string{"id", "name", "datasource_id", "database_name", "table_name", "sql", "type", "mode", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
@@ -95,7 +95,7 @@ func TestDatasetService_GetByID(t *testing.T) {
 }
 
 func TestDatasetService_inferDeType(t *testing.T) {
-	svc := NewDatasetService(nil, nil, nil)
+	svc := NewDatasetService(nil, nil, nil, nil)
 
 	assert.Equal(t, int8(2), svc.inferDeType("BIGINT"))
 	assert.Equal(t, int8(0), svc.inferDeType("VARCHAR"))
@@ -114,7 +114,7 @@ func TestDatasetService_inferDeType(t *testing.T) {
 func TestDatasetService_List(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDatasetRepository(db)
-	svc := NewDatasetService(repo, nil, nil)
+	svc := NewDatasetService(repo, nil, nil, nil)
 
 	columns := []string{"id", "name", "datasource_id", "database_name", "table_name", "sql", "type", "mode", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
@@ -132,7 +132,7 @@ func TestDatasetService_List(t *testing.T) {
 func TestDatasetService_Update(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDatasetRepository(db)
-	svc := NewDatasetService(repo, nil, nil)
+	svc := NewDatasetService(repo, nil, nil, nil)
 
 	columns := []string{"id", "name", "datasource_id", "database_name", "table_name", "sql", "type", "mode", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
@@ -164,7 +164,7 @@ func TestDatasetService_Update(t *testing.T) {
 func TestDatasetService_Delete(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDatasetRepository(db)
-	svc := NewDatasetService(repo, nil, nil)
+	svc := NewDatasetService(repo, nil, nil, nil)
 
 	mock.ExpectExec("UPDATE datasets SET deleted_at = NOW").
 		WithArgs(1).
@@ -179,7 +179,7 @@ func TestDatasetService_getTableColumns_UsesConnector(t *testing.T) {
 	db, _ := testutil.NewMockDB(t)
 	repo := repository.NewDatasetRepository(db)
 	dsRepo := repository.NewDatasourceRepository(db)
-	svc := NewDatasetService(repo, dsRepo, nil)
+	svc := NewDatasetService(repo, dsRepo, nil, nil)
 
 	mockConn := &mockConnector{columns: []engine.ColumnInfo{
 		{Name: "id", Type: "INT", Length: 11},
@@ -198,7 +198,7 @@ func TestDatasetService_queryTableData_UsesConnector(t *testing.T) {
 	db, _ := testutil.NewMockDB(t)
 	repo := repository.NewDatasetRepository(db)
 	dsRepo := repository.NewDatasourceRepository(db)
-	svc := NewDatasetService(repo, dsRepo, nil)
+	svc := NewDatasetService(repo, dsRepo, nil, nil)
 
 	mockConn := &mockConnector{data: []map[string]interface{}{{ "id": 42, "name": "Alice" }}}
 	svc.newConnector = func(string) (engine.DatasourceConnector, error) { return mockConn, nil }
@@ -213,7 +213,7 @@ func TestDatasetService_buildRowFilter(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDatasetRepository(db)
 	rowPermRepo := repository.NewRowPermissionRepository(db)
-	svc := NewDatasetService(repo, nil, rowPermRepo)
+	svc := NewDatasetService(repo, nil, rowPermRepo, nil)
 
 	columns := []string{"id", "dataset_id", "field_name", "operator", "value", "user_attr", "status", "created_at", "updated_at"}
 	now := time.Now()
@@ -235,7 +235,7 @@ func TestDatasetService_getTableColumns_ConnectorError(t *testing.T) {
 	db, _ := testutil.NewMockDB(t)
 	repo := repository.NewDatasetRepository(db)
 	dsRepo := repository.NewDatasourceRepository(db)
-	svc := NewDatasetService(repo, dsRepo, nil)
+	svc := NewDatasetService(repo, dsRepo, nil, nil)
 
 	svc.newConnector = func(string) (engine.DatasourceConnector, error) {
 		return nil, fmt.Errorf("unsupported type")
@@ -250,7 +250,7 @@ func TestDatasetService_queryTableData_ConnectorError(t *testing.T) {
 	db, _ := testutil.NewMockDB(t)
 	repo := repository.NewDatasetRepository(db)
 	dsRepo := repository.NewDatasourceRepository(db)
-	svc := NewDatasetService(repo, dsRepo, nil)
+	svc := NewDatasetService(repo, dsRepo, nil, nil)
 
 	svc.newConnector = func(string) (engine.DatasourceConnector, error) {
 		return nil, fmt.Errorf("unsupported type")
@@ -265,7 +265,7 @@ func TestDatasetService_SyncFields_SQL(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDatasetRepository(db)
 	dsRepo := repository.NewDatasourceRepository(db)
-	svc := NewDatasetService(repo, dsRepo, nil)
+	svc := NewDatasetService(repo, dsRepo, nil, nil)
 
 	columns := []string{"id", "name", "datasource_id", "database_name", "table_name", "sql", "type", "mode", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()

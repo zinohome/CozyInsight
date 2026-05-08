@@ -27,7 +27,7 @@ func setupExportHandler(t *testing.T) (*ExportHandler, *gin.Engine, sqlmock.Sqlm
 	chartRepo := repository.NewChartRepository(sqlxDB)
 	datasetRepo := repository.NewDatasetRepository(sqlxDB)
 	dsRepo := repository.NewDatasourceRepository(sqlxDB)
-	chartService := service.NewChartService(chartRepo, datasetRepo, dsRepo, nil)
+	chartService := service.NewChartService(chartRepo, datasetRepo, dsRepo, nil, nil)
 	h := NewExportHandler(chartService)
 	r := gin.New()
 	return h, r, mock

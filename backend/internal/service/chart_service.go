@@ -14,14 +14,15 @@ import (
 )
 
 type ChartService struct {
-	repo        *repository.ChartRepository
-	datasetRepo *repository.DatasetRepository
-	dsRepo      *repository.DatasourceRepository
-	cache       *CacheService
+	repo          *repository.ChartRepository
+	datasetRepo   *repository.DatasetRepository
+	dsRepo        *repository.DatasourceRepository
+	cache         *CacheService
+	connectorPool *engine.ConnectorPool
 }
 
-func NewChartService(repo *repository.ChartRepository, datasetRepo *repository.DatasetRepository, dsRepo *repository.DatasourceRepository, cache *CacheService) *ChartService {
-	return &ChartService{repo: repo, datasetRepo: datasetRepo, dsRepo: dsRepo, cache: cache}
+func NewChartService(repo *repository.ChartRepository, datasetRepo *repository.DatasetRepository, dsRepo *repository.DatasourceRepository, cache *CacheService, pool *engine.ConnectorPool) *ChartService {
+	return &ChartService{repo: repo, datasetRepo: datasetRepo, dsRepo: dsRepo, cache: cache, connectorPool: pool}
 }
 
 func (s *ChartService) Create(ctx context.Context, req *dto.CreateChartRequest, userID uint64) (*model.Chart, error) {
@@ -139,13 +140,21 @@ func (s *ChartService) GetData(ctx context.Context, chartID uint64) (*dto.ChartD
 	}
 
 	// Execute via connector
-	conn, err := engine.NewConnector(datasource.Type)
-	if err != nil {
-		return nil, fmt.Errorf("create connector failed: %w", err)
+	var conn engine.DatasourceConnector
+	if s.connectorPool != nil {
+		conn, err = s.connectorPool.Get(datasource.ID, datasource.Type, datasource.Config)
+	} else {
+		conn, err = engine.NewConnector(datasource.Type)
+		if err != nil {
+			return nil, fmt.Errorf("create connector failed: %w", err)
+		}
+		if err := conn.Connect(datasource.Config); err != nil {
+			return nil, fmt.Errorf("connect failed: %w", err)
+		}
+		defer conn.Close()
 	}
-	defer conn.Close()
-	if err := conn.Connect(datasource.Config); err != nil {
-		return nil, fmt.Errorf("connect failed: %w", err)
+	if err != nil {
+		return nil, fmt.Errorf("get connector failed: %w", err)
 	}
 
 	data, err := conn.Query(ctx, sql, args...)

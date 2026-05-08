@@ -20,7 +20,7 @@ func TestChartService_Create(t *testing.T) {
 	repo := repository.NewChartRepository(db)
 	datasetRepo := repository.NewDatasetRepository(db)
 	dsRepo := repository.NewDatasourceRepository(db)
-	svc := NewChartService(repo, datasetRepo, dsRepo, nil)
+	svc := NewChartService(repo, datasetRepo, dsRepo, nil, nil)
 
 	mock.ExpectExec("INSERT INTO charts").
 		WillReturnResult(sqlmock.NewResult(1, 1))
@@ -42,7 +42,7 @@ func TestChartService_GetByID(t *testing.T) {
 	repo := repository.NewChartRepository(db)
 	datasetRepo := repository.NewDatasetRepository(db)
 	dsRepo := repository.NewDatasourceRepository(db)
-	svc := NewChartService(repo, datasetRepo, dsRepo, nil)
+	svc := NewChartService(repo, datasetRepo, dsRepo, nil, nil)
 
 	columns := []string{"id", "title", "type", "dataset_id", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
@@ -65,7 +65,7 @@ func TestChartService_List(t *testing.T) {
 	repo := repository.NewChartRepository(db)
 	datasetRepo := repository.NewDatasetRepository(db)
 	dsRepo := repository.NewDatasourceRepository(db)
-	svc := NewChartService(repo, datasetRepo, dsRepo, nil)
+	svc := NewChartService(repo, datasetRepo, dsRepo, nil, nil)
 
 	columns := []string{"id", "title", "type", "dataset_id", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
@@ -85,7 +85,7 @@ func TestChartService_Update(t *testing.T) {
 	repo := repository.NewChartRepository(db)
 	datasetRepo := repository.NewDatasetRepository(db)
 	dsRepo := repository.NewDatasourceRepository(db)
-	svc := NewChartService(repo, datasetRepo, dsRepo, nil)
+	svc := NewChartService(repo, datasetRepo, dsRepo, nil, nil)
 
 	columns := []string{"id", "title", "type", "dataset_id", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
@@ -116,7 +116,7 @@ func TestChartService_Update_NotFound(t *testing.T) {
 	repo := repository.NewChartRepository(db)
 	datasetRepo := repository.NewDatasetRepository(db)
 	dsRepo := repository.NewDatasourceRepository(db)
-	svc := NewChartService(repo, datasetRepo, dsRepo, nil)
+	svc := NewChartService(repo, datasetRepo, dsRepo, nil, nil)
 
 	mock.ExpectQuery("SELECT \\* FROM charts WHERE id = \\? AND deleted_at IS NULL").
 		WithArgs(1).
@@ -131,7 +131,7 @@ func TestChartService_Delete(t *testing.T) {
 	repo := repository.NewChartRepository(db)
 	datasetRepo := repository.NewDatasetRepository(db)
 	dsRepo := repository.NewDatasourceRepository(db)
-	svc := NewChartService(repo, datasetRepo, dsRepo, nil)
+	svc := NewChartService(repo, datasetRepo, dsRepo, nil, nil)
 
 	mock.ExpectExec("UPDATE charts SET deleted_at = NOW").
 		WithArgs(1).
@@ -147,7 +147,7 @@ func TestChartService_GetData(t *testing.T) {
 	chartRepo := repository.NewChartRepository(db)
 	datasetRepo := repository.NewDatasetRepository(db)
 	dsRepo := repository.NewDatasourceRepository(db)
-	svc := NewChartService(chartRepo, datasetRepo, dsRepo, nil)
+	svc := NewChartService(chartRepo, datasetRepo, dsRepo, nil, nil)
 
 	// Mock chart SELECT
 	chartCols := []string{"id", "title", "type", "dataset_id", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}

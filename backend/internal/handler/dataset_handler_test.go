@@ -46,7 +46,7 @@ func setupDatasetHandler(t *testing.T) (*gin.Engine, sqlmock.Sqlmock) {
 	dsRepo := repository.NewDatasourceRepository(sqlxDB)
 	rowPermRepo := repository.NewRowPermissionRepository(sqlxDB)
 	repo := repository.NewDatasetRepository(sqlxDB)
-	svc := service.NewDatasetService(repo, dsRepo, rowPermRepo)
+	svc := service.NewDatasetService(repo, dsRepo, rowPermRepo, nil)
 	svc.SetConnectorFactory(func(string) (engine.DatasourceConnector, error) {
 		return &testConnector{
 			columns: []engine.ColumnInfo{{Name: "id", Type: "INT", Length: 11}},
