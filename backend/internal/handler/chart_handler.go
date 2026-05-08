@@ -1,7 +1,10 @@
 package handler
 
 import (
+	"database/sql"
+	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -99,6 +102,24 @@ func (h *ChartHandler) GetData(c *gin.Context) {
 	}
 	resp, err := h.service.GetData(c.Request.Context(), id)
 	if err != nil {
+		// Map errors to appropriate status codes
+		if errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusNotFound, gin.H{"code": 404, "error": err.Error()})
+			return
+		}
+		// Check if it's a "not found" error wrapped by the service layer
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, gin.H{"code": 404, "error": err.Error()})
+			return
+		}
+		// Check if it's a connection/database error
+		if strings.Contains(err.Error(), "connect") ||
+			strings.Contains(err.Error(), "open") ||
+			strings.Contains(err.Error(), "ping") ||
+			strings.Contains(err.Error(), "query failed") {
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "error": err.Error()})
 		return
 	}

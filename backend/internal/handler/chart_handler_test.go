@@ -272,5 +272,31 @@ func TestChartHandler_GetData(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	// Will error because connection config is incomplete, but verifies endpoint exists
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestChartHandler_GetData_NotFound(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	sqlxDB := sqlx.NewDb(db, "mysql")
+	chartRepo := repository.NewChartRepository(sqlxDB)
+	datasetRepo := repository.NewDatasetRepository(sqlxDB)
+	dsRepo := repository.NewDatasourceRepository(sqlxDB)
+	svc := service.NewChartService(chartRepo, datasetRepo, dsRepo)
+	handler := NewChartHandler(svc)
+
+	mock.ExpectQuery("SELECT \\* FROM charts WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(999).
+		WillReturnError(sql.ErrNoRows)
+
+	r := gin.New()
+	r.GET("/chart/:id/data", handler.GetData)
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/chart/999/data", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }
