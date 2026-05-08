@@ -21,6 +21,7 @@ interface LayoutItem {
 }
 
 interface DashboardChartItem {
+  instanceId: string
   chartId: number
   layout: LayoutItem
   data?: ChartDataResponse
@@ -41,14 +42,27 @@ export default function DashboardDesigner() {
     try {
       const d = await dashboardAPI.get(Number(id))
       setDashboard(d)
+      const allCharts = await chartAPI.list()
+      setCharts(allCharts)
       if (d.config) {
         const cfg = JSON.parse(d.config)
         if (cfg.items && Array.isArray(cfg.items)) {
-          setItems(cfg.items)
+          // Restore chart info and fetch data for each item
+          const restoredItems = await Promise.all(
+            cfg.items.map(async (item: DashboardChartItem) => {
+              const chart = allCharts.find(c => c.id === item.chartId)
+              let data: ChartDataResponse | undefined
+              try {
+                data = await chartAPI.getData(item.chartId)
+              } catch {
+                // ignore
+              }
+              return { ...item, chart, data }
+            })
+          )
+          setItems(restoredItems)
         }
       }
-      const allCharts = await chartAPI.list()
-      setCharts(allCharts)
     } catch {
       message.error('加载仪表板失败')
     }
@@ -60,7 +74,7 @@ export default function DashboardDesigner() {
 
   const handleLayoutChange = (layout: LayoutItem[]) => {
     setItems(prev => prev.map(item => {
-      const l = layout.find(x => x.i === String(item.chartId))
+      const l = layout.find(x => x.i === item.instanceId)
       if (l) {
         return { ...item, layout: { i: l.i, x: l.x, y: l.y, w: l.w, h: l.h } }
       }
@@ -80,9 +94,11 @@ export default function DashboardDesigner() {
       message.warning('图表数据加载失败，将只显示占位')
     }
 
+    const instanceId = `${selectedChartId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     const newItem: DashboardChartItem = {
+      instanceId,
       chartId: selectedChartId,
-      layout: { i: String(selectedChartId), x: 0, y: 0, w: 6, h: 8 },
+      layout: { i: instanceId, x: 0, y: 0, w: 6, h: 8 },
       chart,
       data,
     }
@@ -91,13 +107,15 @@ export default function DashboardDesigner() {
     setSelectedChartId(null)
   }
 
-  const handleRemoveChart = (chartId: number) => {
-    setItems(prev => prev.filter(i => i.chartId !== chartId))
+  const handleRemoveChart = (instanceId: string) => {
+    setItems(prev => prev.filter(i => i.instanceId !== instanceId))
   }
 
   const handleSave = async () => {
     if (!dashboard) return
-    const config = JSON.stringify({ items: items.map(({ chartId, layout }) => ({ chartId, layout })) })
+    const config = JSON.stringify({
+      items: items.map(({ instanceId, chartId, layout }) => ({ instanceId, chartId, layout }))
+    })
     try {
       await dashboardAPI.update(dashboard.id, { config })
       message.success('保存成功')
@@ -128,10 +146,10 @@ export default function DashboardDesigner() {
           isResizable
         >
           {items.map(item => (
-            <div key={item.chartId} style={{ background: '#fff', borderRadius: 4, boxShadow: '0 1px 4px rgba(0,0,0,0.1)' }}>
+            <div key={item.instanceId} style={{ background: '#fff', borderRadius: 4, boxShadow: '0 1px 4px rgba(0,0,0,0.1)' }}>
               <div style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ fontWeight: 'bold' }}>{item.chart?.title || '图表'}</span>
-                <Button type="text" size="small" danger onClick={() => handleRemoveChart(item.chartId)}>移除</Button>
+                <Button type="text" size="small" danger onClick={() => handleRemoveChart(item.instanceId)}>移除</Button>
               </div>
               <div style={{ padding: 8, height: 'calc(100% - 40px)' }}>
                 {item.data ? (
