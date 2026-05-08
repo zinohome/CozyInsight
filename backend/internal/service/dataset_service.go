@@ -227,9 +227,9 @@ func (s *DatasetService) queryTableData(ctx context.Context, ds *model.Datasourc
 	}
 	var tableRef string
 	if dbName != "" {
-		tableRef = fmt.Sprintf("%s.%s", engine.QuoteIdentifier(dbName), engine.QuoteIdentifier(tableName))
+		tableRef = fmt.Sprintf("%s.%s", engine.QuoteIdentifier(dbName, ds.Type), engine.QuoteIdentifier(tableName, ds.Type))
 	} else {
-		tableRef = engine.QuoteIdentifier(tableName)
+		tableRef = engine.QuoteIdentifier(tableName, ds.Type)
 	}
 	query := fmt.Sprintf("SELECT * FROM %s LIMIT %d", tableRef, limit)
 	return conn.Query(ctx, query)

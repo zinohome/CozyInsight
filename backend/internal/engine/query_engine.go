@@ -62,13 +62,13 @@ var allowedOperators = map[string]bool{
 }
 
 // BuildSQL generates a parameterized SELECT SQL and its bound arguments.
-func BuildSQL(tableName string, config ChartQueryConfig) (string, []interface{}, error) {
+func BuildSQL(tableName string, dialect string, config ChartQueryConfig) (string, []interface{}, error) {
 	var selectCols []string
 	var groupByCols []string
 
 	for _, d := range config.Dimensions {
-		selectCols = append(selectCols, QuoteIdentifier(d.Field))
-		groupByCols = append(groupByCols, QuoteIdentifier(d.Field))
+		selectCols = append(selectCols, QuoteIdentifier(d.Field, dialect))
+		groupByCols = append(groupByCols, QuoteIdentifier(d.Field, dialect))
 	}
 
 	for _, m := range config.Metrics {
@@ -81,7 +81,7 @@ func BuildSQL(tableName string, config ChartQueryConfig) (string, []interface{},
 			alias = fmt.Sprintf("%s_%s", strings.ToLower(agg), m.Field)
 		}
 		selectCols = append(selectCols,
-			fmt.Sprintf("%s(%s) AS %s", agg, QuoteIdentifier(m.Field), QuoteIdentifier(alias)))
+			fmt.Sprintf("%s(%s) AS %s", agg, QuoteIdentifier(m.Field, dialect), QuoteIdentifier(alias, dialect)))
 	}
 
 	// Validate filters early so that invalid operators are caught before
@@ -94,7 +94,7 @@ func BuildSQL(tableName string, config ChartQueryConfig) (string, []interface{},
 			return "", nil, fmt.Errorf("unsupported operator: %s", f.Operator)
 		}
 		conditions = append(conditions,
-			fmt.Sprintf("%s %s ?", QuoteIdentifier(f.Field), op))
+			fmt.Sprintf("%s %s ?", QuoteIdentifier(f.Field, dialect), op))
 		args = append(args, f.Value)
 	}
 
@@ -104,7 +104,7 @@ func BuildSQL(tableName string, config ChartQueryConfig) (string, []interface{},
 
 	query := fmt.Sprintf("SELECT %s FROM %s",
 		strings.Join(selectCols, ", "),
-		QuoteIdentifier(tableName))
+		QuoteIdentifier(tableName, dialect))
 
 	if len(conditions) > 0 {
 		query += " WHERE " + strings.Join(conditions, " AND ")
@@ -122,7 +122,7 @@ func BuildSQL(tableName string, config ChartQueryConfig) (string, []interface{},
 				dir = "asc"
 			}
 			orderParts = append(orderParts,
-				fmt.Sprintf("%s %s", QuoteIdentifier(o.Field), dir))
+				fmt.Sprintf("%s %s", QuoteIdentifier(o.Field, dialect), dir))
 		}
 		query += " ORDER BY " + strings.Join(orderParts, ", ")
 	}
@@ -134,7 +134,13 @@ func BuildSQL(tableName string, config ChartQueryConfig) (string, []interface{},
 	return query, args, nil
 }
 
-// QuoteIdentifier wraps a name in backticks to avoid SQL injection from field names.
-func QuoteIdentifier(name string) string {
-	return "`" + strings.ReplaceAll(name, "`", "``") + "`"
+// QuoteIdentifier wraps a name in database-specific identifier quotes.
+func QuoteIdentifier(name string, dialect string) string {
+	switch dialect {
+	case "postgresql", "postgres":
+		return "\"" + strings.ReplaceAll(name, "\"", "\"\"") + "\""
+	default:
+		// MySQL and others
+		return "`" + strings.ReplaceAll(name, "`", "``") + "`"
+	}
 }

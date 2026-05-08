@@ -125,7 +125,7 @@ func (s *ChartService) GetData(ctx context.Context, chartID uint64) (*dto.ChartD
 		queryConfig.Orders[i] = engine.Order{Field: o.Field, Direction: o.Direction}
 	}
 
-	sql, args, err := engine.BuildSQL(dataset.TableName, queryConfig)
+	sql, args, err := engine.BuildSQL(dataset.TableName, datasource.Type, queryConfig)
 	if err != nil {
 		return nil, fmt.Errorf("build sql failed: %w", err)
 	}
