@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -73,7 +74,7 @@ func (h *DashboardHandler) Update(c *gin.Context) {
 
 	userID := middleware.GetUserID(c)
 	if err := h.service.Update(c.Request.Context(), id, &req, userID); err != nil {
-		if err.Error() == "permission denied: not owner" {
+		if errors.Is(err, service.ErrNotOwner) {
 			c.JSON(http.StatusForbidden, gin.H{"code": 403, "error": err.Error()})
 			return
 		}
@@ -91,7 +92,7 @@ func (h *DashboardHandler) Delete(c *gin.Context) {
 	}
 	userID := middleware.GetUserID(c)
 	if err := h.service.Delete(c.Request.Context(), id, userID); err != nil {
-		if err.Error() == "permission denied: not owner" {
+		if errors.Is(err, service.ErrNotOwner) {
 			c.JSON(http.StatusForbidden, gin.H{"code": 403, "error": err.Error()})
 			return
 		}
@@ -110,7 +111,7 @@ func (h *DashboardHandler) EnableShare(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	token, err := h.service.EnableShare(c.Request.Context(), id, userID)
 	if err != nil {
-		if err.Error() == "permission denied: not owner" {
+		if errors.Is(err, service.ErrNotOwner) {
 			c.JSON(http.StatusForbidden, gin.H{"code": 403, "error": err.Error()})
 			return
 		}
@@ -127,7 +128,7 @@ func (h *DashboardHandler) DisableShare(c *gin.Context) {
 	}
 	userID := middleware.GetUserID(c)
 	if err := h.service.DisableShare(c.Request.Context(), id, userID); err != nil {
-		if err.Error() == "permission denied: not owner" {
+		if errors.Is(err, service.ErrNotOwner) {
 			c.JSON(http.StatusForbidden, gin.H{"code": 403, "error": err.Error()})
 			return
 		}

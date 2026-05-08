@@ -40,9 +40,6 @@ func (s *ShareLinkService) GetDashboard(ctx context.Context, token string) (*mod
 	if err != nil {
 		return nil, fmt.Errorf("share link not found: %w", err)
 	}
-	if link.Status != 1 {
-		return nil, fmt.Errorf("share link disabled")
-	}
 	if link.ExpireAt != nil && link.ExpireAt.Before(time.Now()) {
 		return nil, fmt.Errorf("share link expired")
 	}
@@ -56,10 +53,13 @@ func (s *ShareLinkService) GetDashboard(ctx context.Context, token string) (*mod
 	return dashboard, nil
 }
 
-func (s *ShareLinkService) Revoke(ctx context.Context, token string) error {
+func (s *ShareLinkService) Revoke(ctx context.Context, token string, userID uint64) error {
 	link, err := s.repo.FindByToken(ctx, token)
 	if err != nil {
 		return fmt.Errorf("share link not found: %w", err)
+	}
+	if link.CreatedBy != userID {
+		return ErrNotOwner
 	}
 	return s.repo.Delete(ctx, link.ID)
 }

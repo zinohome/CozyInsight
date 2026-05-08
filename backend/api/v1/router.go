@@ -20,10 +20,9 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 	authHandler := handler.NewAuthHandler(authService)
 
 	dsRepo := repository.NewDatasourceRepository(db)
-	dsService := service.NewDatasourceService(dsRepo)
-	dsHandler := handler.NewDatasourceHandler(dsService)
-
 	connectorPool := engine.NewConnectorPool()
+	dsService := service.NewDatasourceService(dsRepo, connectorPool)
+	dsHandler := handler.NewDatasourceHandler(dsService)
 
 	datasetRepo := repository.NewDatasetRepository(db)
 	rowPermRepo := repository.NewRowPermissionRepository(db)
@@ -38,10 +37,10 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 	exportHandler := handler.NewExportHandler(chartService)
 
 	dashboardRepo := repository.NewDashboardRepository(db)
-	dashboardService := service.NewDashboardService(dashboardRepo)
+	shareLinkRepo := repository.NewShareLinkRepository(db)
+	dashboardService := service.NewDashboardService(dashboardRepo, shareLinkRepo)
 	dashboardHandler := handler.NewDashboardHandler(dashboardService)
 
-	shareLinkRepo := repository.NewShareLinkRepository(db)
 	shareLinkService := service.NewShareLinkService(shareLinkRepo, dashboardRepo)
 	shareHandler := handler.NewShareHandler(shareLinkService)
 

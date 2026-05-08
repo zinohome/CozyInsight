@@ -28,7 +28,7 @@ func setupDashboardHandler(t *testing.T) (*gin.Engine, sqlmock.Sqlmock) {
 
 	sqlxDB := sqlx.NewDb(db, "mysql")
 	repo := repository.NewDashboardRepository(sqlxDB)
-	svc := service.NewDashboardService(repo)
+	svc := service.NewDashboardService(repo, nil)
 	h := NewDashboardHandler(svc)
 
 	r := gin.New()

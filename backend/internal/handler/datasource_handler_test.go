@@ -28,7 +28,7 @@ func setupDatasourceHandler(t *testing.T) (*gin.Engine, sqlmock.Sqlmock) {
 
 	sqlxDB := sqlx.NewDb(db, "mysql")
 	repo := repository.NewDatasourceRepository(sqlxDB)
-	svc := service.NewDatasourceService(repo)
+	svc := service.NewDatasourceService(repo, nil)
 	h := NewDatasourceHandler(svc)
 
 	r := gin.New()

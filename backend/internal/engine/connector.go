@@ -325,8 +325,8 @@ func (c *sqliteConnector) GetColumns(ctx context.Context, dbName, tableName stri
 	if c.db == nil {
 		return nil, fmt.Errorf("not connected")
 	}
-	query := `PRAGMA table_info(?)`
-	rows, err := c.db.QueryContext(ctx, query, tableName)
+	query := fmt.Sprintf("PRAGMA table_info(%s)", QuoteIdentifier(tableName, "sqlite"))
+	rows, err := c.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("get columns failed: %w", err)
 	}

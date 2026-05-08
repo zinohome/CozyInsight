@@ -18,7 +18,7 @@ import (
 func TestDatasourceService_Create(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDatasourceRepository(db)
-	svc := NewDatasourceService(repo)
+	svc := NewDatasourceService(repo, nil)
 
 	mock.ExpectExec("INSERT INTO datasources").
 		WillReturnResult(sqlmock.NewResult(1, 1))
@@ -38,7 +38,7 @@ func TestDatasourceService_Create(t *testing.T) {
 func TestDatasourceService_GetByID(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDatasourceRepository(db)
-	svc := NewDatasourceService(repo)
+	svc := NewDatasourceService(repo, nil)
 
 	columns := []string{"id", "name", "type", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
@@ -59,7 +59,7 @@ func TestDatasourceService_GetByID(t *testing.T) {
 func TestDatasourceService_GetByID_NotFound(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDatasourceRepository(db)
-	svc := NewDatasourceService(repo)
+	svc := NewDatasourceService(repo, nil)
 
 	mock.ExpectQuery("SELECT \\* FROM datasources WHERE id = \\? AND deleted_at IS NULL").
 		WithArgs(999).
@@ -73,7 +73,7 @@ func TestDatasourceService_GetByID_NotFound(t *testing.T) {
 func TestDatasourceService_List(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDatasourceRepository(db)
-	svc := NewDatasourceService(repo)
+	svc := NewDatasourceService(repo, nil)
 
 	columns := []string{"id", "name", "type", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
@@ -93,7 +93,7 @@ func TestDatasourceService_List(t *testing.T) {
 func TestDatasourceService_Update(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDatasourceRepository(db)
-	svc := NewDatasourceService(repo)
+	svc := NewDatasourceService(repo, nil)
 
 	columns := []string{"id", "name", "type", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
@@ -120,7 +120,7 @@ func TestDatasourceService_Update(t *testing.T) {
 func TestDatasourceService_Delete(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDatasourceRepository(db)
-	svc := NewDatasourceService(repo)
+	svc := NewDatasourceService(repo, nil)
 
 	mock.ExpectExec("UPDATE datasources SET deleted_at = NOW").
 		WithArgs(1).
@@ -134,7 +134,7 @@ func TestDatasourceService_Delete(t *testing.T) {
 func TestDatasourceService_TestConnection_UnsupportedType(t *testing.T) {
 	db, _ := testutil.NewMockDB(t)
 	repo := repository.NewDatasourceRepository(db)
-	svc := NewDatasourceService(repo)
+	svc := NewDatasourceService(repo, nil)
 
 	err := svc.TestConnection(context.Background(), &dto.TestConnectionRequest{
 		Type: "unknown",

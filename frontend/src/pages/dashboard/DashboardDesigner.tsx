@@ -5,6 +5,7 @@ import { Responsive, WidthProvider } from 'react-grid-layout'
 import { dashboardAPI } from '@/api/dashboard'
 import { chartAPI } from '@/api/chart'
 import { exportAPI } from '@/api/export'
+import { shareAPI } from '@/api/share'
 import ChartRenderer from '@/components/ChartRenderer'
 import type { Dashboard } from '@/types/dashboard'
 import type { Chart, ChartDataResponse } from '@/types/chart'
@@ -125,12 +126,29 @@ export default function DashboardDesigner() {
     }
   }
 
+  const handleShare = async () => {
+    if (!dashboard) return
+    try {
+      const res = await shareAPI.create(dashboard.id)
+      if (res.code === 200) {
+        const shareUrl = `${window.location.origin}/share/${res.data}`
+        await navigator.clipboard.writeText(shareUrl)
+        message.success(`分享链接已复制: ${shareUrl}`)
+      } else {
+        message.error(res.error || '分享失败')
+      }
+    } catch {
+      message.error('分享失败')
+    }
+  }
+
   return (
     <div style={{ height: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '8px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3 style={{ margin: 0 }}>{dashboard?.title || '仪表板设计器'}</h3>
         <Space>
           <Button onClick={() => setAddModalOpen(true)}>添加图表</Button>
+          <Button onClick={handleShare}>分享</Button>
           <Button type="primary" onClick={handleSave}>保存</Button>
           <Button onClick={() => navigate('/dashboard')}>返回</Button>
         </Space>

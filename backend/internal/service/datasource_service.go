@@ -6,20 +6,24 @@ import (
 	"encoding/json"
 	"fmt"
 
+	_ "github.com/ClickHouse/clickhouse-go/v2"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
+	_ "github.com/mattn/go-sqlite3"
 
 	"cozy-insight/internal/dto"
+	"cozy-insight/internal/engine"
 	"cozy-insight/internal/model"
 	"cozy-insight/internal/repository"
 )
 
 type DatasourceService struct {
-	repo *repository.DatasourceRepository
+	repo          *repository.DatasourceRepository
+	connectorPool *engine.ConnectorPool
 }
 
-func NewDatasourceService(repo *repository.DatasourceRepository) *DatasourceService {
-	return &DatasourceService{repo: repo}
+func NewDatasourceService(repo *repository.DatasourceRepository, pool *engine.ConnectorPool) *DatasourceService {
+	return &DatasourceService{repo: repo, connectorPool: pool}
 }
 
 func (s *DatasourceService) Create(ctx context.Context, req *dto.CreateDatasourceRequest, userID uint64) (*model.Datasource, error) {
@@ -70,11 +74,23 @@ func (s *DatasourceService) Update(ctx context.Context, id uint64, req *dto.Upda
 		ds.Status = *req.Status
 	}
 
-	return s.repo.Update(ctx, ds)
+	if err := s.repo.Update(ctx, ds); err != nil {
+		return err
+	}
+	if s.connectorPool != nil {
+		s.connectorPool.Remove(id)
+	}
+	return nil
 }
 
 func (s *DatasourceService) Delete(ctx context.Context, id uint64) error {
-	return s.repo.Delete(ctx, id)
+	if err := s.repo.Delete(ctx, id); err != nil {
+		return err
+	}
+	if s.connectorPool != nil {
+		s.connectorPool.Remove(id)
+	}
+	return nil
 }
 
 func (s *DatasourceService) TestConnection(ctx context.Context, req *dto.TestConnectionRequest) error {
@@ -99,6 +115,7 @@ func (s *DatasourceService) TestConnection(ctx context.Context, req *dto.TestCon
 	case "sqlite":
 		database, _ := req.Config["database"].(string)
 		dsn = database
+		req.Type = "sqlite3"
 	case "clickhouse":
 		host, _ := req.Config["host"].(string)
 		port, _ := req.Config["port"].(float64)

@@ -140,6 +140,8 @@ func QuoteIdentifier(name string, dialect string) string {
 	switch dialect {
 	case "postgresql", "postgres":
 		return "\"" + strings.ReplaceAll(name, "\"", "\"\"") + "\""
+	case "sqlite":
+		return "\"" + strings.ReplaceAll(name, "\"", "\"\"") + "\""
 	default:
 		// MySQL and others
 		return "`" + strings.ReplaceAll(name, "`", "``") + "`"

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -17,7 +18,7 @@ import (
 func TestDashboardService_Create(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDashboardRepository(db)
-	svc := NewDashboardService(repo)
+	svc := NewDashboardService(repo, nil)
 
 	mock.ExpectExec("INSERT INTO dashboards").
 		WillReturnResult(sqlmock.NewResult(1, 1))
@@ -35,7 +36,7 @@ func TestDashboardService_Create(t *testing.T) {
 func TestDashboardService_GetByID(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDashboardRepository(db)
-	svc := NewDashboardService(repo)
+	svc := NewDashboardService(repo, nil)
 
 	columns := []string{"id", "title", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
@@ -55,7 +56,7 @@ func TestDashboardService_GetByID(t *testing.T) {
 func TestDashboardService_List(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDashboardRepository(db)
-	svc := NewDashboardService(repo)
+	svc := NewDashboardService(repo, nil)
 
 	columns := []string{"id", "title", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
@@ -73,7 +74,7 @@ func TestDashboardService_List(t *testing.T) {
 func TestDashboardService_Update(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDashboardRepository(db)
-	svc := NewDashboardService(repo)
+	svc := NewDashboardService(repo, nil)
 
 	columns := []string{"id", "title", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
@@ -99,7 +100,7 @@ func TestDashboardService_Update(t *testing.T) {
 func TestDashboardService_Delete(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDashboardRepository(db)
-	svc := NewDashboardService(repo)
+	svc := NewDashboardService(repo, nil)
 
 	columns := []string{"id", "title", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
@@ -121,7 +122,7 @@ func TestDashboardService_Delete(t *testing.T) {
 func TestDashboardService_AddChart(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDashboardRepository(db)
-	svc := NewDashboardService(repo)
+	svc := NewDashboardService(repo, nil)
 
 	mock.ExpectExec("INSERT INTO dashboard_charts").
 		WillReturnResult(sqlmock.NewResult(1, 1))
@@ -140,7 +141,7 @@ func TestDashboardService_AddChart(t *testing.T) {
 func TestDashboardService_GetCharts(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDashboardRepository(db)
-	svc := NewDashboardService(repo)
+	svc := NewDashboardService(repo, nil)
 
 	columns := []string{"id", "dashboard_id", "chart_id", "position_x", "position_y", "width", "height", "config", "created_at", "updated_at"}
 	now := time.Now()
@@ -160,7 +161,7 @@ func TestDashboardService_GetCharts(t *testing.T) {
 func TestDashboardService_Update_Forbidden(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDashboardRepository(db)
-	svc := NewDashboardService(repo)
+	svc := NewDashboardService(repo, nil)
 
 	columns := []string{"id", "title", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
@@ -174,13 +175,13 @@ func TestDashboardService_Update_Forbidden(t *testing.T) {
 		Title: "Updated",
 	}, 1)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "permission denied")
+	assert.True(t, errors.Is(err, ErrNotOwner))
 }
 
 func TestDashboardService_Delete_Forbidden(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDashboardRepository(db)
-	svc := NewDashboardService(repo)
+	svc := NewDashboardService(repo, nil)
 
 	columns := []string{"id", "title", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
@@ -192,24 +193,30 @@ func TestDashboardService_Delete_Forbidden(t *testing.T) {
 
 	err := svc.Delete(context.Background(), 1, 1)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "permission denied")
+	assert.True(t, errors.Is(err, ErrNotOwner))
 }
 
 func TestDashboardService_EnableShare(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDashboardRepository(db)
-	svc := NewDashboardService(repo)
+	shareLinkRepo := repository.NewShareLinkRepository(db)
+	svc := NewDashboardService(repo, shareLinkRepo)
 
-	columns := []string{"id", "title", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	dbColumns := []string{"id", "title", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
 	mock.ExpectQuery("SELECT \\* FROM dashboards WHERE id = \\? AND deleted_at IS NULL").
 		WithArgs(1).
-		WillReturnRows(sqlmock.NewRows(columns).AddRow(
+		WillReturnRows(sqlmock.NewRows(dbColumns).AddRow(
 			1, "Test", "{}", "", 0, 1, 1, now, now, nil,
 		))
 
-	mock.ExpectExec("UPDATE dashboards SET").
-		WillReturnResult(sqlmock.NewResult(0, 1))
+	slColumns := []string{"id", "token", "resource_type", "resource_id", "created_by", "expire_at", "status", "created_at"}
+	mock.ExpectQuery("SELECT \\* FROM share_links WHERE resource_type = \\? AND resource_id = \\? AND status = 1").
+		WithArgs("dashboard", 1).
+		WillReturnRows(sqlmock.NewRows(slColumns))
+
+	mock.ExpectExec("INSERT INTO share_links").
+		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	token, err := svc.EnableShare(context.Background(), 1, 1)
 	require.NoError(t, err)
@@ -220,17 +227,26 @@ func TestDashboardService_EnableShare(t *testing.T) {
 func TestDashboardService_DisableShare(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDashboardRepository(db)
-	svc := NewDashboardService(repo)
+	shareLinkRepo := repository.NewShareLinkRepository(db)
+	svc := NewDashboardService(repo, shareLinkRepo)
 
-	columns := []string{"id", "title", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	dbColumns := []string{"id", "title", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
 	mock.ExpectQuery("SELECT \\* FROM dashboards WHERE id = \\? AND deleted_at IS NULL").
 		WithArgs(1).
-		WillReturnRows(sqlmock.NewRows(columns).AddRow(
+		WillReturnRows(sqlmock.NewRows(dbColumns).AddRow(
 			1, "Test", "{}", "", 0, 1, 1, now, now, nil,
 		))
 
-	mock.ExpectExec("UPDATE dashboards SET").
+	slColumns := []string{"id", "token", "resource_type", "resource_id", "created_by", "expire_at", "status", "created_at"}
+	mock.ExpectQuery("SELECT \\* FROM share_links WHERE resource_type = \\? AND resource_id = \\? AND status = 1").
+		WithArgs("dashboard", 1).
+		WillReturnRows(sqlmock.NewRows(slColumns).AddRow(
+			1, "abc123", "dashboard", 1, 1, nil, 1, now,
+		))
+
+	mock.ExpectExec("UPDATE share_links SET status = 0 WHERE id = \\?").
+		WithArgs(1).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
 	err := svc.DisableShare(context.Background(), 1, 1)
@@ -241,7 +257,7 @@ func TestDashboardService_DisableShare(t *testing.T) {
 func TestDashboardService_RemoveChart(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDashboardRepository(db)
-	svc := NewDashboardService(repo)
+	svc := NewDashboardService(repo, nil)
 
 	mock.ExpectExec("DELETE FROM dashboard_charts WHERE dashboard_id = \\? AND chart_id = \\?").
 		WithArgs(1, 1).

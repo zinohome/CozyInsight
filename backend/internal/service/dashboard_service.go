@@ -13,11 +13,12 @@ import (
 )
 
 type DashboardService struct {
-	repo *repository.DashboardRepository
+	repo         *repository.DashboardRepository
+	shareLinkRepo *repository.ShareLinkRepository
 }
 
-func NewDashboardService(repo *repository.DashboardRepository) *DashboardService {
-	return &DashboardService{repo: repo}
+func NewDashboardService(repo *repository.DashboardRepository, shareLinkRepo *repository.ShareLinkRepository) *DashboardService {
+	return &DashboardService{repo: repo, shareLinkRepo: shareLinkRepo}
 }
 
 func (s *DashboardService) Create(ctx context.Context, req *dto.CreateDashboardRequest, userID uint64) (*model.Dashboard, error) {
@@ -56,7 +57,7 @@ func (s *DashboardService) Update(ctx context.Context, id uint64, req *dto.Updat
 		return err
 	}
 	if d.CreatedBy != userID {
-		return fmt.Errorf("permission denied: not owner")
+		return ErrNotOwner
 	}
 
 	if req.Title != "" {
@@ -78,7 +79,7 @@ func (s *DashboardService) Delete(ctx context.Context, id uint64, userID uint64)
 		return err
 	}
 	if d.CreatedBy != userID {
-		return fmt.Errorf("permission denied: not owner")
+		return ErrNotOwner
 	}
 	return s.repo.Delete(ctx, id)
 }
@@ -89,16 +90,30 @@ func (s *DashboardService) EnableShare(ctx context.Context, id uint64, userID ui
 		return "", err
 	}
 	if d.CreatedBy != userID {
-		return "", fmt.Errorf("permission denied: not owner")
+		return "", ErrNotOwner
 	}
-	if d.ShareToken == "" {
-		d.ShareToken = uuid.New().String()
-	}
-	d.ShareEnabled = 1
-	if err := s.repo.Update(ctx, d); err != nil {
+
+	links, err := s.shareLinkRepo.ListByResource(ctx, "dashboard", id)
+	if err != nil {
 		return "", err
 	}
-	return d.ShareToken, nil
+	for _, link := range links {
+		if err := s.shareLinkRepo.Delete(ctx, link.ID); err != nil {
+			return "", err
+		}
+	}
+
+	link := &model.ShareLink{
+		Token:        uuid.New().String(),
+		ResourceType: "dashboard",
+		ResourceID:   id,
+		CreatedBy:    userID,
+		Status:       1,
+	}
+	if err := s.shareLinkRepo.Create(ctx, link); err != nil {
+		return "", err
+	}
+	return link.Token, nil
 }
 
 func (s *DashboardService) DisableShare(ctx context.Context, id uint64, userID uint64) error {
@@ -107,10 +122,19 @@ func (s *DashboardService) DisableShare(ctx context.Context, id uint64, userID u
 		return err
 	}
 	if d.CreatedBy != userID {
-		return fmt.Errorf("permission denied: not owner")
+		return ErrNotOwner
 	}
-	d.ShareEnabled = 0
-	return s.repo.Update(ctx, d)
+
+	links, err := s.shareLinkRepo.ListByResource(ctx, "dashboard", id)
+	if err != nil {
+		return err
+	}
+	for _, link := range links {
+		if err := s.shareLinkRepo.Delete(ctx, link.ID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *DashboardService) AddChart(ctx context.Context, dashboardID uint64, req *dto.AddChartToDashboardRequest) error {
