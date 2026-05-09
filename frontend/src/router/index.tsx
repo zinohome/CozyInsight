@@ -46,7 +46,11 @@ export default function AppRoutes() {
   }
 
   if (location.pathname.startsWith('/screen/view/')) {
-    return <ScreenView />
+    return (
+      <Routes>
+        <Route path="/screen/view/:id" element={<ScreenView />} />
+      </Routes>
+    )
   }
 
   return <LayoutRoutes />

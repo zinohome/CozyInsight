@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Table, Button, Space, Tag, Modal, Form, Input, message } from 'antd'
 import { dashboardAPI } from '@/api/dashboard'
@@ -40,7 +40,7 @@ export default function DashboardPage() {
     }
   }
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = useCallback(async (id: number) => {
     try {
       await dashboardAPI.remove(id)
       message.success('删除成功')
@@ -48,14 +48,15 @@ export default function DashboardPage() {
     } catch {
       message.error('删除失败')
     }
-  }
+  }, [])
 
   const openCreateModal = (type: 'dashboard' | 'screen') => {
     setCreateType(type)
+    form.resetFields()
     setModalVisible(true)
   }
 
-  const columns = [
+  const columns = useMemo(() => [
     { title: '标题', dataIndex: 'title' },
     { title: '类型', dataIndex: 'type', render: (type: 'dashboard' | 'screen') => (type === 'screen' ? <Tag color="purple">数据大屏</Tag> : <Tag color="blue">仪表板</Tag>) },
     { title: '状态', dataIndex: 'status', render: (status: number) => (status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">禁用</Tag>) },
@@ -69,13 +70,15 @@ export default function DashboardPage() {
         </Space>
       ),
     },
-  ]
+  ], [navigate, handleDelete])
 
   return (
     <div style={{ padding: 24 }}>
       <div style={{ marginBottom: 16 }}>
-        <Button type="primary" onClick={() => openCreateModal('dashboard')}>新建仪表板</Button>
-        <Button type="primary" style={{ marginLeft: 8 }} onClick={() => openCreateModal('screen')}>新建数据大屏</Button>
+        <Space>
+          <Button type="primary" onClick={() => openCreateModal('dashboard')}>新建仪表板</Button>
+          <Button type="primary" onClick={() => openCreateModal('screen')}>新建数据大屏</Button>
+        </Space>
       </div>
       <Table rowKey="id" columns={columns} dataSource={list} loading={loading} />
       <Modal title={createType === 'screen' ? '新建数据大屏' : '新建仪表板'} open={modalVisible} onCancel={() => setModalVisible(false)} footer={null}>
