@@ -100,7 +100,12 @@ func (h *ChartHandler) GetData(c *gin.Context) {
 	if !ok {
 		return
 	}
-	resp, err := h.service.GetData(c.Request.Context(), id)
+	var req dto.GetChartDataRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "error": err.Error()})
+		return
+	}
+	resp, err := h.service.GetData(c.Request.Context(), id, req.RuntimeFilters, req.DrillDimension)
 	if err != nil {
 		// Map errors to appropriate status codes
 		if errors.Is(err, sql.ErrNoRows) {

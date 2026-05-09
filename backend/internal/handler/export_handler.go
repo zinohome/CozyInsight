@@ -24,7 +24,7 @@ func (h *ExportHandler) ExportCSV(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.chartService.GetData(c.Request.Context(), id)
+	resp, err := h.chartService.GetData(c.Request.Context(), id, nil, nil)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "error": err.Error()})
 		return

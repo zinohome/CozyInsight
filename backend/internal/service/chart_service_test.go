@@ -177,7 +177,7 @@ func TestChartService_GetData(t *testing.T) {
 		))
 
 	// Connection will fail because config is incomplete (no username/password/database)
-	_, err := svc.GetData(context.Background(), 1)
+	_, err := svc.GetData(context.Background(), 1, nil, nil)
 	assert.Error(t, err)
 	// Should get "connect failed" error from Ping failing
 }

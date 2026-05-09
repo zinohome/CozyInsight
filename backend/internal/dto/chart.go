@@ -49,6 +49,11 @@ type CreateChartRequest struct {
 	Config    string `json:"config"`
 }
 
+type GetChartDataRequest struct {
+	RuntimeFilters []ChartFilter `json:"runtimeFilters"`
+	DrillDimension *string       `json:"drillDimension"`
+}
+
 // UpdateChartRequest 更新图表请求
 type UpdateChartRequest struct {
 	Title     string  `json:"title"`

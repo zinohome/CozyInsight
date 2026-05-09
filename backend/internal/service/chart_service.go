@@ -86,7 +86,7 @@ func (s *ChartService) Delete(ctx context.Context, id uint64) error {
 	return s.repo.Delete(ctx, id)
 }
 
-func (s *ChartService) GetData(ctx context.Context, chartID uint64) (*dto.ChartDataResponse, error) {
+func (s *ChartService) GetData(ctx context.Context, chartID uint64, runtimeFilters []dto.ChartFilter, drillDimension *string) (*dto.ChartDataResponse, error) {
 	chart, err := s.repo.FindByID(ctx, chartID)
 	if err != nil {
 		return nil, fmt.Errorf("chart not found: %w", err)
@@ -101,6 +101,14 @@ func (s *ChartService) GetData(ctx context.Context, chartID uint64) (*dto.ChartD
 	var config dto.ChartConfig
 	if err := json.Unmarshal([]byte(chart.Config), &config); err != nil {
 		return nil, fmt.Errorf("invalid chart config: %w", err)
+	}
+
+	// Append runtime filters
+	config.Filters = append(config.Filters, runtimeFilters...)
+
+	// Override dimension for drill-down
+	if drillDimension != nil && *drillDimension != "" {
+		config.Dimensions = []dto.ChartDimension{{Field: *drillDimension, Sort: "asc"}}
 	}
 
 	dataset, err := s.datasetRepo.FindByID(ctx, chart.DatasetID)

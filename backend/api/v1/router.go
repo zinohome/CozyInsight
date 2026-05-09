@@ -77,7 +77,7 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 			authd.GET("/chart/:id", chartHandler.Get)
 			authd.PUT("/chart/:id", chartHandler.Update)
 			authd.DELETE("/chart/:id", chartHandler.Delete)
-			authd.GET("/chart/:id/data", chartHandler.GetData)
+			authd.POST("/chart/:id/data", chartHandler.GetData)
 			authd.GET("/chart/:id/export/csv", exportHandler.ExportCSV)
 
 			authd.GET("/dashboard", dashboardHandler.List)

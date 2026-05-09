@@ -266,9 +266,11 @@ func TestChartHandler_GetData(t *testing.T) {
 		))
 
 	r := gin.New()
-	r.GET("/chart/:id/data", handler.GetData)
+	r.POST("/chart/:id/data", handler.GetData)
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/chart/1/data", nil)
+	body, _ := json.Marshal(dto.GetChartDataRequest{})
+	req, _ := http.NewRequest("POST", "/chart/1/data", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w, req)
 
 	// Will error because connection config is incomplete, but verifies endpoint exists
@@ -293,9 +295,11 @@ func TestChartHandler_GetData_NotFound(t *testing.T) {
 		WillReturnError(sql.ErrNoRows)
 
 	r := gin.New()
-	r.GET("/chart/:id/data", handler.GetData)
+	r.POST("/chart/:id/data", handler.GetData)
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/chart/999/data", nil)
+	body, _ := json.Marshal(dto.GetChartDataRequest{})
+	req, _ := http.NewRequest("POST", "/chart/999/data", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
