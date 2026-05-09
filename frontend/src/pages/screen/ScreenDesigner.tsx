@@ -55,14 +55,12 @@ export default function ScreenDesigner() {
   const chartDataCacheRef = useRef<ChartDataCache>({})
   const chartInfoCacheRef = useRef<ChartInfoCache>({})
   const [cacheVersion, setCacheVersion] = useState(0)
-  const zIndexCounterRef = useRef(1)
-
-  // cacheVersion is intentionally unused in render; it only serves to force re-render when refs update
-  void cacheVersion
+  // cacheVersion forces re-render when chart data refs update
+  // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+  cacheVersion
 
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [chartError, setChartError] = useState<string>('')
 
   // Fetch dashboard and load config
   const fetchDashboard = useCallback(async () => {
@@ -141,7 +139,7 @@ export default function ScreenDesigner() {
   // Load chart data and info for items
   useEffect(() => {
     const loadChartData = async () => {
-      setChartError('')
+      // per-chart loading errors are shown inline, not globally
       let updated = false
 
       for (const item of items) {
@@ -158,7 +156,7 @@ export default function ScreenDesigner() {
             }
             updated = true
           } catch {
-            setChartError('图表数据加载失败')
+            // per-chart error shown inline; do not block entire designer
           }
         }
 
@@ -171,7 +169,7 @@ export default function ScreenDesigner() {
             }
             updated = true
           } catch {
-            setChartError('图表数据加载失败')
+            // per-chart error shown inline; do not block entire designer
           }
         }
       }
@@ -203,6 +201,7 @@ export default function ScreenDesigner() {
 
   const addChart = useCallback(
     (chartId: number) => {
+      const maxZ = items.reduce((max, i) => Math.max(max, i.zIndex), 0)
       const newItem: ScreenItem = {
         instanceId: `item_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
         chartId,
@@ -210,7 +209,7 @@ export default function ScreenDesigner() {
         y: 50,
         width: 400,
         height: 300,
-        zIndex: zIndexCounterRef.current++,
+        zIndex: maxZ + 1,
       }
       setItems((prev) => [...prev, newItem])
       setSelectedItemId(newItem.instanceId)
@@ -334,13 +333,7 @@ export default function ScreenDesigner() {
     )
   }
 
-  if (chartError) {
-    return (
-      <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>
-        {chartError}
-      </div>
-    )
-  }
+  // per-chart errors are handled inline in each Rnd component
 
   return (
     <div style={{ height: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column' }}>
@@ -390,7 +383,7 @@ export default function ScreenDesigner() {
               width: canvas.width,
               height: canvas.height,
               transform: `scale(${scale})`,
-              transformOrigin: 'center center',
+              transformOrigin: 'top left',
               backgroundColor: canvas.bgColor,
               backgroundImage: canvas.bgImage ? `url(${canvas.bgImage})` : undefined,
               backgroundSize: 'cover',
@@ -422,7 +415,7 @@ export default function ScreenDesigner() {
                       : '1px dashed rgba(255,255,255,0.3)',
                     boxSizing: 'border-box',
                   }}
-                  bounds="parent"
+                  // Note: bounds disabled because parent has CSS scale() which causes react-rnd coordinate drift
                 >
                   <div
                     style={{

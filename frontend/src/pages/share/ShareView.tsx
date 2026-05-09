@@ -1,83 +1,25 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useState, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { shareAPI } from '@/api/share'
-import { chartAPI } from '@/api/chart'
 import ChartRenderer from '@/components/ChartRenderer'
-import type { Dashboard, ScreenConfig, ScreenItem } from '@/types/dashboard'
-import type { Chart, ChartDataResponse } from '@/types/chart'
-
-interface ScreenChartItem extends ScreenItem {
-  chart?: Chart
-  data?: ChartDataResponse
-}
+import { useScreenData } from '@/hooks/useScreenData'
+import type { Dashboard } from '@/types/dashboard'
 
 export default function ShareView() {
   const { token } = useParams<{ token: string }>()
   const [dashboard, setDashboard] = useState<Dashboard | null>(null)
-  const [items, setItems] = useState<ScreenChartItem[]>([])
-  const [canvas, setCanvas] = useState<{ width: number; height: number; bgColor: string; bgImage?: string }>({ width: 1920, height: 1080, bgColor: '#fff' })
-  const [scale, setScale] = useState(1)
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(true)
-  const containerRef = useRef<HTMLDivElement>(null)
 
-  const fetchData = useCallback(async () => {
-    if (!token) return
-    try {
-      const res = await shareAPI.get(token)
-      if (res.code === 200 && res.data) {
-        const d = res.data as Dashboard
-        setDashboard(d)
-
-        if (d.type === 'screen' && d.config && d.config !== '{}') {
-          const cfg: ScreenConfig = JSON.parse(d.config)
-          if (cfg.canvas) setCanvas(cfg.canvas)
-          if (cfg.items && Array.isArray(cfg.items)) {
-            const charts = await chartAPI.list()
-            const restored = await Promise.all(
-              cfg.items.map(async (item: ScreenItem) => {
-                const chart = charts.find(c => c.id === item.chartId)
-                let data: ChartDataResponse | undefined
-                try { data = await chartAPI.getData(item.chartId) } catch { /* ignore */ }
-                return { ...item, chart, data }
-              })
-            )
-            setItems(restored)
-          }
-        }
-      } else {
-        setError(res.error || '分享链接无效或已过期')
-      }
-    } catch {
-      setError('加载失败')
-    } finally {
-      setLoading(false)
+  const getDashboard = useCallback(async () => {
+    const res = await shareAPI.get(token!)
+    if (res.code !== 200 || !res.data) {
+      throw new Error(res.error || '分享链接无效或已过期')
     }
+    const d = res.data as Dashboard
+    setDashboard(d)
+    return d
   }, [token])
 
-  useEffect(() => {
-    let timeoutId: ReturnType<typeof setTimeout>
-    const poll = async () => {
-      await fetchData()
-      timeoutId = setTimeout(poll, 30000)
-    }
-    poll()
-    return () => clearTimeout(timeoutId)
-  }, [fetchData])
-
-  useEffect(() => {
-    const handleResize = () => {
-      if (!containerRef.current) return
-      const newScale = Math.min(
-        window.innerWidth / canvas.width,
-        window.innerHeight / canvas.height
-      )
-      setScale(newScale)
-    }
-    handleResize()
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [canvas.width, canvas.height])
+  const { items, canvas, scale, error, loading } = useScreenData(getDashboard)
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>加载中...</div>
   if (error) return <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>{error}</div>
@@ -85,7 +27,7 @@ export default function ShareView() {
 
   if (dashboard.type === 'screen') {
     return (
-      <div ref={containerRef} style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: '#000', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+      <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: '#000', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
         <div
           style={{
             width: canvas.width,
@@ -112,7 +54,7 @@ export default function ShareView() {
     )
   }
 
-  // Grid dashboard share view
+  // Grid dashboard share view (placeholder — can be enhanced later)
   return (
     <div style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
       <h2>{dashboard.title}</h2>

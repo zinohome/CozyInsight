@@ -1,85 +1,18 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Button } from 'antd'
+import { Button, message } from 'antd'
 import { dashboardAPI } from '@/api/dashboard'
-import { chartAPI } from '@/api/chart'
 import ChartRenderer from '@/components/ChartRenderer'
-import type { ScreenConfig, ScreenItem } from '@/types/dashboard'
-import type { Chart, ChartDataResponse } from '@/types/chart'
-
-interface ScreenChartItem extends ScreenItem {
-  chart?: Chart
-  data?: ChartDataResponse
-}
+import { useScreenData } from '@/hooks/useScreenData'
 
 export default function ScreenView() {
   const { id } = useParams<{ id: string }>()
-  const [items, setItems] = useState<ScreenChartItem[]>([])
-  const [canvas, setCanvas] = useState<{ width: number; height: number; bgColor: string; bgImage?: string }>({ width: 1920, height: 1080, bgColor: '#0a1f44' })
-  const [scale, setScale] = useState(1)
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [isFullscreen, setIsFullscreen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
-  const fetchData = useCallback(async () => {
-    if (!id) return
-    try {
-      setLoading(true)
-      setError('')
-      const d = await dashboardAPI.get(Number(id))
-      if (d.type !== 'screen') {
-        setError('该资源不是数据大屏')
-        return
-      }
-
-      if (d.config && d.config !== '{}') {
-        const cfg: ScreenConfig = JSON.parse(d.config)
-        if (cfg.canvas) setCanvas(cfg.canvas)
-
-        if (cfg.items && Array.isArray(cfg.items)) {
-          const charts = await chartAPI.list()
-          const restored = await Promise.all(
-            cfg.items.map(async (item: ScreenItem) => {
-              const chart = charts.find(c => c.id === item.chartId)
-              let data: ChartDataResponse | undefined
-              try { data = await chartAPI.getData(item.chartId) } catch { /* ignore */ }
-              return { ...item, chart, data }
-            })
-          )
-          setItems(restored)
-        }
-      }
-    } catch {
-      setError('加载数据大屏失败')
-    } finally {
-      setLoading(false)
-    }
-  }, [id])
-
-  useEffect(() => {
-    let timeoutId: ReturnType<typeof setTimeout>
-    const poll = async () => {
-      await fetchData()
-      timeoutId = setTimeout(poll, 30000)
-    }
-    poll()
-    return () => clearTimeout(timeoutId)
-  }, [fetchData])
-
-  useEffect(() => {
-    const handleResize = () => {
-      if (!containerRef.current) return
-      const newScale = Math.min(
-        window.innerWidth / canvas.width,
-        window.innerHeight / canvas.height
-      )
-      setScale(newScale)
-    }
-    handleResize()
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [canvas.width, canvas.height])
+  const { items, canvas, scale, error, loading } = useScreenData(
+    () => dashboardAPI.get(Number(id))
+  )
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -93,7 +26,9 @@ export default function ScreenView() {
     const el = containerRef.current
     if (!el) return
     if (!document.fullscreenElement) {
-      el.requestFullscreen().catch(() => {})
+      el.requestFullscreen().catch(() => {
+        message.error('全屏模式不可用')
+      })
     } else {
       document.exitFullscreen().catch(() => {})
     }

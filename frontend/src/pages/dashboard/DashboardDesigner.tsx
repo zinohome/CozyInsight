@@ -43,6 +43,10 @@ export default function DashboardDesigner() {
     if (!id) return
     try {
       const d = await dashboardAPI.get(Number(id))
+      if (d.type === 'screen') {
+        navigate(`/screen/designer/${id}`)
+        return
+      }
       setDashboard(d)
       const allCharts = await chartAPI.list()
       setCharts(allCharts)
