@@ -41,8 +41,13 @@ export default function DashboardDesigner() {
 
   const fetchDashboard = useCallback(async () => {
     if (!id) return
+    const numericId = Number(id)
+    if (!Number.isFinite(numericId)) {
+      message.error('无效的 ID')
+      return
+    }
     try {
-      const d = await dashboardAPI.get(Number(id))
+      const d = await dashboardAPI.get(numericId)
       if (d.type === 'screen') {
         navigate(`/screen/designer/${id}`)
         return

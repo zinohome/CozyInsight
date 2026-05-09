@@ -10,8 +10,11 @@ export default function ScreenView() {
   const containerRef = useRef<HTMLDivElement>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
 
+  const numericId = Number(id)
+  const isValidId = Number.isFinite(numericId)
+
   const { items, canvas, scale, error, loading } = useScreenData(
-    () => dashboardAPI.get(Number(id))
+    () => isValidId ? dashboardAPI.get(numericId) : Promise.reject(new Error('无效的 ID'))
   )
 
   useEffect(() => {
@@ -67,7 +70,7 @@ export default function ScreenView() {
           backgroundSize: 'cover',
           position: 'relative',
           transform: `scale(${scale})`,
-          transformOrigin: 'top left',
+          transformOrigin: 'center center',
         }}
       >
         {items.map(item => (

@@ -37,7 +37,7 @@ export default function ShareView() {
             backgroundSize: 'cover',
             position: 'relative',
             transform: `scale(${scale})`,
-            transformOrigin: 'top left',
+            transformOrigin: 'center center',
           }}
         >
           {items.map(item => (

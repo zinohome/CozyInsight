@@ -66,8 +66,14 @@ export default function ScreenDesigner() {
   const fetchDashboard = useCallback(async () => {
     if (!id) return
     setLoading(true)
+    const numericId = Number(id)
+    if (!Number.isFinite(numericId)) {
+      setError('无效的 ID')
+      setLoading(false)
+      return
+    }
     try {
-      const d = await dashboardAPI.get(Number(id))
+      const d = await dashboardAPI.get(numericId)
       if (d.type !== 'screen') {
         setError('该资源不是数据大屏')
         setLoading(false)
@@ -201,18 +207,21 @@ export default function ScreenDesigner() {
 
   const addChart = useCallback(
     (chartId: number) => {
-      const maxZ = items.reduce((max, i) => Math.max(max, i.zIndex), 0)
-      const newItem: ScreenItem = {
-        instanceId: `item_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-        chartId,
-        x: 50,
-        y: 50,
-        width: 400,
-        height: 300,
-        zIndex: maxZ + 1,
-      }
-      setItems((prev) => [...prev, newItem])
-      setSelectedItemId(newItem.instanceId)
+      const instanceId = `item_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+      setItems((prev) => {
+        const maxZ = prev.reduce((max, i) => Math.max(max, i.zIndex), 0)
+        const newItem: ScreenItem = {
+          instanceId,
+          chartId,
+          x: 50,
+          y: 50,
+          width: 400,
+          height: 300,
+          zIndex: maxZ + 1,
+        }
+        return [...prev, newItem]
+      })
+      setSelectedItemId(instanceId)
       setAddModalOpen(false)
     },
     []
@@ -354,11 +363,11 @@ export default function ScreenDesigner() {
         </Typography.Text>
         <Space>
           <Button onClick={() => setAddModalOpen(true)}>添加图表</Button>
-          <Button onClick={() => navigate(`/screen/${id}/preview`)}>预览</Button>
+          <Button onClick={() => navigate(`/screen/view/${id}`)}>预览</Button>
           <Button type="primary" loading={saving} onClick={handleSave}>
             保存
           </Button>
-          <Button onClick={() => navigate('/screen')}>返回</Button>
+          <Button onClick={() => navigate('/dashboard')}>返回</Button>
         </Space>
       </div>
 
@@ -383,7 +392,7 @@ export default function ScreenDesigner() {
               width: canvas.width,
               height: canvas.height,
               transform: `scale(${scale})`,
-              transformOrigin: 'top left',
+              transformOrigin: 'center center',
               backgroundColor: canvas.bgColor,
               backgroundImage: canvas.bgImage ? `url(${canvas.bgImage})` : undefined,
               backgroundSize: 'cover',
@@ -408,8 +417,8 @@ export default function ScreenDesigner() {
                     handleResizeStop(item.instanceId, e, dir, ref, delta, pos)
                   }
                   onClick={(e) => handleSelect(item.instanceId, e)}
+                  z={item.zIndex}
                   style={{
-                    zIndex: item.zIndex,
                     border: isSelected
                       ? '2px solid #1890ff'
                       : '1px dashed rgba(255,255,255,0.3)',

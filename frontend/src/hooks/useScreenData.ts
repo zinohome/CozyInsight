@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { chartAPI } from '@/api/chart'
 import type { Dashboard, ScreenConfig, ScreenItem } from '@/types/dashboard'
 import type { Chart, ChartDataResponse } from '@/types/chart'
@@ -26,23 +26,37 @@ export function useScreenData(
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
 
+  // Keep latest fetcher reference without recreating refetch on every render
+  const getDashboardRef = useRef(getDashboard)
+  getDashboardRef.current = getDashboard
+  const chartListRef = useRef<Chart[]>([])
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const refetch = useCallback(async (silent = false) => {
     try {
       if (!silent) setLoading(true)
-      setError('')
-      const d = await getDashboard()
+      if (!silent) setError('')
+      const d = await getDashboardRef.current()
       if (d.type !== 'screen') {
-        setError('该资源不是数据大屏')
+        if (!silent) setError('该资源不是数据大屏')
         return
       }
 
+      let newItems: ScreenChartItem[] = []
       if (d.config && d.config !== '{}') {
         const cfg: ScreenConfig = JSON.parse(d.config)
         if (cfg.canvas) setCanvas(cfg.canvas)
 
-        if (cfg.items && Array.isArray(cfg.items)) {
-          const charts = await chartAPI.list()
-          const restored = await Promise.all(
+        if (cfg.items && Array.isArray(cfg.items) && cfg.items.length > 0) {
+          if (chartListRef.current.length === 0) {
+            try {
+              chartListRef.current = await chartAPI.list()
+            } catch {
+              /* ignore */
+            }
+          }
+          const charts = chartListRef.current
+          newItems = await Promise.all(
             cfg.items.map(async (item: ScreenItem) => {
               const chart = charts.find((c) => c.id === item.chartId)
               let data: ChartDataResponse | undefined
@@ -54,15 +68,15 @@ export function useScreenData(
               return { ...item, chart, data }
             })
           )
-          setItems(restored)
         }
       }
+      setItems(newItems)
     } catch {
-      setError('加载数据大屏失败')
+      if (!silent) setError('加载数据大屏失败')
     } finally {
       if (!silent) setLoading(false)
     }
-  }, [getDashboard])
+  }, [])
 
   useEffect(() => {
     let timeoutId: ReturnType<typeof setTimeout>
