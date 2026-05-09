@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { shareAPI } from '@/api/share'
 import { chartAPI } from '@/api/chart'
@@ -16,8 +16,10 @@ export default function ShareView() {
   const [dashboard, setDashboard] = useState<Dashboard | null>(null)
   const [items, setItems] = useState<ScreenChartItem[]>([])
   const [canvas, setCanvas] = useState<{ width: number; height: number; bgColor: string; bgImage?: string }>({ width: 1920, height: 1080, bgColor: '#fff' })
+  const [scale, setScale] = useState(1)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   const fetchData = useCallback(async () => {
     if (!token) return
@@ -54,10 +56,28 @@ export default function ShareView() {
   }, [token])
 
   useEffect(() => {
-    fetchData()
-    const interval = setInterval(fetchData, 30000)
-    return () => clearInterval(interval)
+    let timeoutId: ReturnType<typeof setTimeout>
+    const poll = async () => {
+      await fetchData()
+      timeoutId = setTimeout(poll, 30000)
+    }
+    poll()
+    return () => clearTimeout(timeoutId)
   }, [fetchData])
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (!containerRef.current) return
+      const newScale = Math.min(
+        window.innerWidth / canvas.width,
+        window.innerHeight / canvas.height
+      )
+      setScale(newScale)
+    }
+    handleResize()
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [canvas.width, canvas.height])
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>加载中...</div>
   if (error) return <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>{error}</div>
@@ -65,7 +85,7 @@ export default function ShareView() {
 
   if (dashboard.type === 'screen') {
     return (
-      <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: '#000', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+      <div ref={containerRef} style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: '#000', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
         <div
           style={{
             width: canvas.width,
@@ -74,7 +94,7 @@ export default function ShareView() {
             backgroundImage: canvas.bgImage ? `url(${canvas.bgImage})` : undefined,
             backgroundSize: 'cover',
             position: 'relative',
-            transform: `scale(${Math.min(window.innerWidth / canvas.width, window.innerHeight / canvas.height)})`,
+            transform: `scale(${scale})`,
             transformOrigin: 'top left',
           }}
         >
