@@ -1,12 +1,14 @@
 import { Routes, Route, useLocation } from 'react-router-dom'
 import LoginPage from '@/pages/login'
 import ShareView from '@/pages/share/ShareView'
+import ScreenView from '@/pages/screen/ScreenView'
 import DatasourcePage from '@/pages/datasource'
 import DatasetPage from '@/pages/dataset'
 import ChartPage from '@/pages/chart'
 import ChartBuilder from '@/pages/chart/ChartBuilder'
 import DashboardPage from '@/pages/dashboard'
 import DashboardDesigner from '@/pages/dashboard/DashboardDesigner'
+import ScreenDesigner from '@/pages/screen/ScreenDesigner'
 import UserPage from '@/pages/system/user'
 import RolePage from '@/pages/system/role'
 import LogPage from '@/pages/system/log'
@@ -23,6 +25,7 @@ function LayoutRoutes() {
         <Route path="/chart/builder/:id" element={<ChartBuilder />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/dashboard/designer/:id" element={<DashboardDesigner />} />
+        <Route path="/screen/designer/:id" element={<ScreenDesigner />} />
         <Route path="/system/user" element={<UserPage />} />
         <Route path="/system/role" element={<RolePage />} />
         <Route path="/system/log" element={<LogPage />} />
@@ -40,6 +43,10 @@ export default function AppRoutes() {
 
   if (location.pathname.startsWith('/share/')) {
     return <ShareView />
+  }
+
+  if (location.pathname.startsWith('/screen/view/')) {
+    return <ScreenView />
   }
 
   return <LayoutRoutes />
