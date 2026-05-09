@@ -148,6 +148,7 @@ export default function DashboardDesigner() {
         <h3 style={{ margin: 0 }}>{dashboard?.title || '仪表板设计器'}</h3>
         <Space>
           <Button onClick={() => setAddModalOpen(true)}>添加图表</Button>
+          {dashboard?.type === 'screen' && <Button onClick={() => navigate(`/screen/view/${id}`)}>预览</Button>}
           <Button onClick={handleShare}>分享</Button>
           <Button type="primary" onClick={handleSave}>保存</Button>
           <Button onClick={() => navigate('/dashboard')}>返回</Button>
