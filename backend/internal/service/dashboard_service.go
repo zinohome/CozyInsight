@@ -30,16 +30,17 @@ func (s *DashboardService) Create(ctx context.Context, req *dto.CreateDashboardR
 		return nil, fmt.Errorf("invalid config json: %w", err)
 	}
 
-	if req.Type == "" {
-		req.Type = "dashboard"
+	dashboardType := req.Type
+	if dashboardType == "" {
+		dashboardType = model.DashboardTypeDashboard
 	}
-	if req.Type != "dashboard" && req.Type != "screen" {
-		return nil, fmt.Errorf("invalid dashboard type: %s", req.Type)
+	if dashboardType != model.DashboardTypeDashboard && dashboardType != model.DashboardTypeScreen {
+		return nil, fmt.Errorf("invalid dashboard type: %s", dashboardType)
 	}
 
 	d := &model.Dashboard{
 		Title:     req.Title,
-		Type:      req.Type,
+		Type:      dashboardType,
 		Config:    req.Config,
 		Status:    1,
 		CreatedBy: userID,
@@ -72,7 +73,7 @@ func (s *DashboardService) Update(ctx context.Context, id uint64, req *dto.Updat
 		d.Title = req.Title
 	}
 	if req.Type != "" {
-		if req.Type != "dashboard" && req.Type != "screen" {
+		if req.Type != model.DashboardTypeDashboard && req.Type != model.DashboardTypeScreen {
 			return fmt.Errorf("invalid dashboard type: %s", req.Type)
 		}
 		d.Type = req.Type
@@ -107,7 +108,7 @@ func (s *DashboardService) EnableShare(ctx context.Context, id uint64, userID ui
 		return "", ErrNotOwner
 	}
 
-	links, err := s.shareLinkRepo.ListByResource(ctx, "dashboard", id)
+	links, err := s.shareLinkRepo.ListByResource(ctx, d.Type, id)
 	if err != nil {
 		return "", err
 	}
@@ -119,7 +120,7 @@ func (s *DashboardService) EnableShare(ctx context.Context, id uint64, userID ui
 
 	link := &model.ShareLink{
 		Token:        uuid.New().String(),
-		ResourceType: "dashboard",
+		ResourceType: d.Type,
 		ResourceID:   id,
 		CreatedBy:    userID,
 		Status:       1,
@@ -139,7 +140,7 @@ func (s *DashboardService) DisableShare(ctx context.Context, id uint64, userID u
 		return ErrNotOwner
 	}
 
-	links, err := s.shareLinkRepo.ListByResource(ctx, "dashboard", id)
+	links, err := s.shareLinkRepo.ListByResource(ctx, d.Type, id)
 	if err != nil {
 		return err
 	}

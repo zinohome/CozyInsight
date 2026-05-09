@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"cozy-insight/internal/dto"
+	"cozy-insight/internal/model"
 	"cozy-insight/internal/repository"
 	"cozy-insight/internal/testutil"
 )
@@ -31,6 +32,56 @@ func TestDashboardService_Create(t *testing.T) {
 	assert.Equal(t, uint64(1), result.ID)
 	assert.Equal(t, "Test Dashboard", result.Title)
 	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestDashboardService_Create_DefaultType(t *testing.T) {
+	db, mock := testutil.NewMockDB(t)
+	repo := repository.NewDashboardRepository(db)
+	svc := NewDashboardService(repo, nil)
+
+	mock.ExpectExec("INSERT INTO dashboards").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	result, err := svc.Create(context.Background(), &dto.CreateDashboardRequest{
+		Title:  "Test Dashboard",
+		Config: "{}",
+		Type:   "",
+	}, 1)
+	require.NoError(t, err)
+	assert.Equal(t, model.DashboardTypeDashboard, result.Type)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestDashboardService_Create_ScreenType(t *testing.T) {
+	db, mock := testutil.NewMockDB(t)
+	repo := repository.NewDashboardRepository(db)
+	svc := NewDashboardService(repo, nil)
+
+	mock.ExpectExec("INSERT INTO dashboards").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	result, err := svc.Create(context.Background(), &dto.CreateDashboardRequest{
+		Title:  "Test Screen",
+		Config: "{}",
+		Type:   model.DashboardTypeScreen,
+	}, 1)
+	require.NoError(t, err)
+	assert.Equal(t, model.DashboardTypeScreen, result.Type)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestDashboardService_Create_InvalidType(t *testing.T) {
+	db, _ := testutil.NewMockDB(t)
+	repo := repository.NewDashboardRepository(db)
+	svc := NewDashboardService(repo, nil)
+
+	_, err := svc.Create(context.Background(), &dto.CreateDashboardRequest{
+		Title:  "Test",
+		Config: "{}",
+		Type:   "invalid",
+	}, 1)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid dashboard type")
 }
 
 func TestDashboardService_GetByID(t *testing.T) {

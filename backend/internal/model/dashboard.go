@@ -2,6 +2,11 @@ package model
 
 import "time"
 
+const (
+	DashboardTypeDashboard = "dashboard"
+	DashboardTypeScreen    = "screen"
+)
+
 type Dashboard struct {
 	ID           uint64     `db:"id" json:"id"`
 	Title        string     `db:"title" json:"title"`
