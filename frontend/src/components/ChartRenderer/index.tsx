@@ -1,18 +1,10 @@
+import { useCallback } from 'react'
 import { Bar, Line, Pie, Area, Scatter, Radar, Funnel, WordCloud, Sankey, Heatmap, Treemap, Gauge } from '@ant-design/charts'
 import { Table } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
+import type { ChartRendererProps, ChartEvent } from '../../types/chart'
 
-interface ChartRendererProps {
-  type: string
-  data: Array<Record<string, unknown>>
-  config: {
-    dimensions: string[]
-    metrics: string[]
-  }
-  height?: number
-}
-
-export default function ChartRenderer({ type, data, config, height = 300 }: ChartRendererProps) {
+export default function ChartRenderer({ type, data, config, height = 300, onEvent }: ChartRendererProps) {
   if (!data || data.length === 0) {
     return (
       <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
@@ -33,6 +25,27 @@ export default function ChartRenderer({ type, data, config, height = 300 }: Char
   const xField = dimensions[0]
   const yField = metrics[0]
 
+  const handleEvent = useCallback(
+    (_chart: unknown, event: Record<string, unknown>) => {
+      if (event.type === 'element:click' && onEvent) {
+        const record = (event.data as Record<string, unknown> | undefined)?.data as Record<string, unknown> | undefined
+        if (!record) return
+
+        const dimensionField = config.dimensions[0]
+        if (!dimensionField) return
+
+        const chartEvent: ChartEvent = {
+          type: 'element:click',
+          dimensionField,
+          dimensionValue: record[dimensionField] as string | number,
+          metrics: record,
+        }
+        onEvent(chartEvent)
+      }
+    },
+    [config.dimensions, onEvent]
+  )
+
   switch (type) {
     case 'bar':
       return (
@@ -42,6 +55,7 @@ export default function ChartRenderer({ type, data, config, height = 300 }: Char
           yField={yField}
           height={height}
           autoFit
+          onEvent={handleEvent}
         />
       )
     case 'line':
@@ -52,6 +66,7 @@ export default function ChartRenderer({ type, data, config, height = 300 }: Char
           yField={yField}
           height={height}
           autoFit
+          onEvent={handleEvent}
         />
       )
     case 'pie': {
@@ -64,6 +79,7 @@ export default function ChartRenderer({ type, data, config, height = 300 }: Char
           colorField={colorField}
           height={height}
           autoFit
+          onEvent={handleEvent}
         />
       )
     }
@@ -75,6 +91,7 @@ export default function ChartRenderer({ type, data, config, height = 300 }: Char
           yField={yField}
           height={height}
           autoFit
+          onEvent={handleEvent}
         />
       )
     case 'scatter':
@@ -85,6 +102,7 @@ export default function ChartRenderer({ type, data, config, height = 300 }: Char
           yField={yField}
           height={height}
           autoFit
+          onEvent={handleEvent}
         />
       )
     case 'radar':
@@ -95,6 +113,7 @@ export default function ChartRenderer({ type, data, config, height = 300 }: Char
           yField={yField}
           height={height}
           autoFit
+          onEvent={handleEvent}
         />
       )
     case 'funnel':
@@ -105,6 +124,7 @@ export default function ChartRenderer({ type, data, config, height = 300 }: Char
           yField={yField}
           height={height}
           autoFit
+          onEvent={handleEvent}
         />
       )
     case 'wordcloud':
@@ -115,6 +135,7 @@ export default function ChartRenderer({ type, data, config, height = 300 }: Char
           weightField={yField}
           height={height}
           autoFit
+          onEvent={handleEvent}
         />
       )
     case 'sankey':
@@ -126,6 +147,7 @@ export default function ChartRenderer({ type, data, config, height = 300 }: Char
           weightField={metrics[0]}
           height={height}
           autoFit
+          onEvent={handleEvent}
         />
       )
     case 'heatmap':
@@ -137,6 +159,7 @@ export default function ChartRenderer({ type, data, config, height = 300 }: Char
           colorField={yField}
           height={height}
           autoFit
+          onEvent={handleEvent}
         />
       )
     case 'treemap':
@@ -147,6 +170,7 @@ export default function ChartRenderer({ type, data, config, height = 300 }: Char
           valueField={yField}
           height={height}
           autoFit
+          onEvent={handleEvent}
         />
       )
     case 'gauge': {
@@ -157,6 +181,7 @@ export default function ChartRenderer({ type, data, config, height = 300 }: Char
           percent={percent}
           height={height}
           autoFit
+          onEvent={handleEvent}
         />
       )
     }
@@ -168,7 +193,27 @@ export default function ChartRenderer({ type, data, config, height = 300 }: Char
       for (const m of metrics) {
         cols.push({ title: m, dataIndex: m, key: m })
       }
-      return <Table columns={cols} dataSource={data} rowKey={(_, idx) => idx!} pagination={false} />
+      return (
+        <Table
+          columns={cols}
+          dataSource={data}
+          rowKey={(_, idx) => idx!}
+          pagination={false}
+          onRow={(record) => ({
+            onClick: () => {
+              if (!onEvent) return
+              const dimensionField = config.dimensions[0]
+              if (!dimensionField) return
+              onEvent({
+                type: 'element:click',
+                dimensionField,
+                dimensionValue: record[dimensionField] as string | number,
+                metrics: record,
+              })
+            },
+          })}
+        />
+      )
     }
     default:
       return (

@@ -51,3 +51,21 @@ export interface ChartDataResponse {
   metrics: string[]
   data: Array<Record<string, unknown>>
 }
+
+export interface ChartEvent {
+  type: 'element:click'
+  dimensionField: string
+  dimensionValue: string | number
+  metrics?: Record<string, unknown>
+}
+
+export interface ChartRendererProps {
+  type: string
+  data: Array<Record<string, unknown>>
+  config: {
+    dimensions: string[]
+    metrics: string[]
+  }
+  height?: number
+  onEvent?: (event: ChartEvent) => void
+}
