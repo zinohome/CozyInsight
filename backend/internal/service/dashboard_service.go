@@ -30,8 +30,16 @@ func (s *DashboardService) Create(ctx context.Context, req *dto.CreateDashboardR
 		return nil, fmt.Errorf("invalid config json: %w", err)
 	}
 
+	if req.Type == "" {
+		req.Type = "dashboard"
+	}
+	if req.Type != "dashboard" && req.Type != "screen" {
+		return nil, fmt.Errorf("invalid dashboard type: %s", req.Type)
+	}
+
 	d := &model.Dashboard{
 		Title:     req.Title,
+		Type:      req.Type,
 		Config:    req.Config,
 		Status:    1,
 		CreatedBy: userID,
@@ -62,6 +70,12 @@ func (s *DashboardService) Update(ctx context.Context, id uint64, req *dto.Updat
 
 	if req.Title != "" {
 		d.Title = req.Title
+	}
+	if req.Type != "" {
+		if req.Type != "dashboard" && req.Type != "screen" {
+			return fmt.Errorf("invalid dashboard type: %s", req.Type)
+		}
+		d.Type = req.Type
 	}
 	if req.Config != "" {
 		d.Config = req.Config

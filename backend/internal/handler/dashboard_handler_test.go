@@ -71,12 +71,12 @@ func TestDashboardHandler_Create(t *testing.T) {
 func TestDashboardHandler_Get(t *testing.T) {
 	r, mock := setupDashboardHandler(t)
 
-	columns := []string{"id", "title", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	columns := []string{"id", "title", "type", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
 	mock.ExpectQuery("SELECT \\* FROM dashboards WHERE id = \\? AND deleted_at IS NULL").
 		WithArgs(1).
 		WillReturnRows(sqlmock.NewRows(columns).AddRow(
-			1, "Test Dashboard", "{}", "", 0, 1, 1, now, now, nil,
+			1, "Test Dashboard", "dashboard", "{}", "", 0, 1, 1, now, now, nil,
 		))
 
 	w := httptest.NewRecorder()
@@ -99,7 +99,7 @@ func TestDashboardHandler_Get_InvalidID(t *testing.T) {
 func TestDashboardHandler_List(t *testing.T) {
 	r, mock := setupDashboardHandler(t)
 
-	columns := []string{"id", "title", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	columns := []string{"id", "title", "type", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	mock.ExpectQuery("SELECT \\* FROM dashboards WHERE deleted_at IS NULL").
 		WillReturnRows(sqlmock.NewRows(columns))
 
@@ -113,12 +113,12 @@ func TestDashboardHandler_List(t *testing.T) {
 func TestDashboardHandler_Update(t *testing.T) {
 	r, mock := setupDashboardHandler(t)
 
-	columns := []string{"id", "title", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	columns := []string{"id", "title", "type", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
 	mock.ExpectQuery("SELECT \\* FROM dashboards WHERE id = \\? AND deleted_at IS NULL").
 		WithArgs(1).
 		WillReturnRows(sqlmock.NewRows(columns).AddRow(
-			1, "Old Dashboard", "{}", "", 0, 1, 1, now, now, nil,
+			1, "Old Dashboard", "dashboard", "{}", "", 0, 1, 1, now, now, nil,
 		))
 
 	mock.ExpectExec("UPDATE dashboards SET").
@@ -139,12 +139,12 @@ func TestDashboardHandler_Update(t *testing.T) {
 func TestDashboardHandler_Delete(t *testing.T) {
 	r, mock := setupDashboardHandler(t)
 
-	columns := []string{"id", "title", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	columns := []string{"id", "title", "type", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
 	now := time.Now()
 	mock.ExpectQuery("SELECT \\* FROM dashboards WHERE id = \\? AND deleted_at IS NULL").
 		WithArgs(1).
 		WillReturnRows(sqlmock.NewRows(columns).AddRow(
-			1, "Test Dashboard", "{}", "", 0, 1, 1, now, now, nil,
+			1, "Test Dashboard", "dashboard", "{}", "", 0, 1, 1, now, now, nil,
 		))
 
 	mock.ExpectExec("UPDATE dashboards SET deleted_at = NOW").

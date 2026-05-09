@@ -18,8 +18,8 @@ func NewDashboardRepository(db *sqlx.DB) *DashboardRepository {
 }
 
 func (r *DashboardRepository) Create(ctx context.Context, d *model.Dashboard) error {
-	query := `INSERT INTO dashboards (title, config, share_token, share_enabled, status, created_by)
-			  VALUES (:title, :config, :share_token, :share_enabled, :status, :created_by)`
+	query := `INSERT INTO dashboards (title, type, config, share_token, share_enabled, status, created_by)
+			  VALUES (:title, :type, :config, :share_token, :share_enabled, :status, :created_by)`
 	result, err := r.db.NamedExecContext(ctx, query, d)
 	if err != nil {
 		return fmt.Errorf("create dashboard failed: %w", err)
@@ -48,7 +48,7 @@ func (r *DashboardRepository) List(ctx context.Context) ([]model.Dashboard, erro
 }
 
 func (r *DashboardRepository) Update(ctx context.Context, d *model.Dashboard) error {
-	query := `UPDATE dashboards SET title = :title, config = :config, share_token = :share_token, share_enabled = :share_enabled, status = :status WHERE id = :id`
+	query := `UPDATE dashboards SET title = :title, type = :type, config = :config, share_token = :share_token, share_enabled = :share_enabled, status = :status WHERE id = :id`
 	if _, err := r.db.NamedExecContext(ctx, query, d); err != nil {
 		return fmt.Errorf("update dashboard failed: %w", err)
 	}

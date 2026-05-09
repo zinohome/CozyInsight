@@ -5,6 +5,7 @@ import "time"
 type Dashboard struct {
 	ID           uint64     `db:"id" json:"id"`
 	Title        string     `db:"title" json:"title"`
+	Type         string     `db:"type" json:"type"`
 	Config       string     `db:"config" json:"config"`
 	ShareToken   string     `db:"share_token" json:"shareToken"`
 	ShareEnabled int8       `db:"share_enabled" json:"shareEnabled"`

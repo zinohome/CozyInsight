@@ -3,12 +3,14 @@ package dto
 // CreateDashboardRequest 创建仪表板请求
 type CreateDashboardRequest struct {
 	Title  string `json:"title" binding:"required"`
+	Type   string `json:"type"`
 	Config string `json:"config"`
 }
 
 // UpdateDashboardRequest 更新仪表板请求
 type UpdateDashboardRequest struct {
 	Title  string `json:"title"`
+	Type   string `json:"type"`
 	Config string `json:"config"`
 	Status *int8  `json:"status"`
 }
