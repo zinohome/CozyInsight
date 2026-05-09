@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -16,9 +17,32 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"cozy-insight/internal/dto"
+	"cozy-insight/internal/engine"
 	"cozy-insight/internal/repository"
 	"cozy-insight/internal/service"
 )
+
+type mockHandlerChartConnector struct {
+	queryCalled bool
+	querySQL    string
+	queryArgs   []interface{}
+	returnData  []map[string]interface{}
+}
+
+func (m *mockHandlerChartConnector) Connect(string) error { return nil }
+func (m *mockHandlerChartConnector) Close() error         { return nil }
+func (m *mockHandlerChartConnector) Query(ctx context.Context, query string, args ...interface{}) ([]map[string]interface{}, error) {
+	m.queryCalled = true
+	m.querySQL = query
+	m.queryArgs = args
+	if m.returnData != nil {
+		return m.returnData, nil
+	}
+	return []map[string]interface{}{}, nil
+}
+func (m *mockHandlerChartConnector) GetColumns(context.Context, string, string) ([]engine.ColumnInfo, error) {
+	return nil, nil
+}
 
 func setupChartHandler(t *testing.T) (*gin.Engine, sqlmock.Sqlmock) {
 	gin.SetMode(gin.TestMode)
@@ -303,4 +327,75 @@ func TestChartHandler_GetData_NotFound(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestChartHandler_GetData_WithRuntimeFilters(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	sqlxDB := sqlx.NewDb(db, "mysql")
+	chartRepo := repository.NewChartRepository(sqlxDB)
+	datasetRepo := repository.NewDatasetRepository(sqlxDB)
+	dsRepo := repository.NewDatasourceRepository(sqlxDB)
+
+	pool := engine.NewConnectorPool()
+	mockConn := &mockHandlerChartConnector{
+		returnData: []map[string]interface{}{{"month": "Jan", "sum_amount": int64(100)}},
+	}
+	pool.Register(1, mockConn)
+
+	svc := service.NewChartService(chartRepo, datasetRepo, dsRepo, nil, pool)
+	handler := NewChartHandler(svc)
+
+	chartCols := []string{"id", "title", "type", "dataset_id", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	now := time.Now()
+	mock.ExpectQuery("SELECT \\* FROM charts WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(chartCols).AddRow(
+			1, "Sales", "bar", 1,
+			`{"dimensions":[{"field":"month"}],"metrics":[{"field":"amount","aggregation":"SUM"}]}`,
+			1, 1, now, now, nil,
+		))
+
+	dsCols := []string{"id", "name", "datasource_id", "database_name", "table_name", "type", "mode", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	mock.ExpectQuery("SELECT \\* FROM datasets WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(dsCols).AddRow(
+			1, "Sales DS", 1, "db", "sales", "table", 0, 1, 1, now, now, nil,
+		))
+
+	datasourceCols := []string{"id", "name", "type", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	mock.ExpectQuery("SELECT \\* FROM datasources WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(datasourceCols).AddRow(
+			1, "Local MySQL", "mysql", `{"host":"h","port":3306,"username":"u","password":"p","database":"db"}`, 1, 1, now, now, nil,
+		))
+
+	r := gin.New()
+	r.POST("/chart/:id/data", handler.GetData)
+	body, _ := json.Marshal(dto.GetChartDataRequest{
+		RuntimeFilters: []dto.ChartFilter{
+			{Field: "region", Operator: "=", Value: "US"},
+		},
+	})
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/chart/1/data", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.True(t, mockConn.queryCalled)
+	assert.Contains(t, mockConn.querySQL, "`region` = ?")
+	assert.Contains(t, mockConn.queryArgs, "US")
+
+	var resp map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	assert.Equal(t, float64(200), resp["code"])
+	data := resp["data"].(map[string]interface{})
+	assert.NotNil(t, data)
+	assert.Equal(t, []interface{}{"month"}, data["dimensions"])
+	assert.Equal(t, []interface{}{"sum_amount"}, data["metrics"])
 }

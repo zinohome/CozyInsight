@@ -56,6 +56,16 @@ func (p *ConnectorPool) Remove(dsID uint64) {
 	}
 }
 
+// Register injects an existing connector for the given datasource ID. Used in tests.
+func (p *ConnectorPool) Register(dsID uint64, conn DatasourceConnector) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.pools == nil {
+		p.pools = make(map[uint64]DatasourceConnector)
+	}
+	p.pools[dsID] = conn
+}
+
 // Close disconnects all pooled connectors and clears the pool.
 func (p *ConnectorPool) Close() {
 	p.mu.Lock()

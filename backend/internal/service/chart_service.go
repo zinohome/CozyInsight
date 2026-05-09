@@ -92,7 +92,8 @@ func (s *ChartService) GetData(ctx context.Context, chartID uint64, runtimeFilte
 		return nil, fmt.Errorf("chart not found: %w", err)
 	}
 
-	if s.cache != nil {
+	hasRuntimeParams := len(runtimeFilters) > 0 || (drillDimension != nil && *drillDimension != "")
+	if s.cache != nil && !hasRuntimeParams {
 		if cached, err := s.cache.GetChartData(ctx, chartID, chart.Config); err == nil {
 			return cached, nil
 		}
@@ -190,7 +191,7 @@ func (s *ChartService) GetData(ctx context.Context, chartID uint64, runtimeFilte
 		Data:       data,
 	}
 
-	if s.cache != nil {
+	if s.cache != nil && !hasRuntimeParams {
 		_ = s.cache.SetChartData(ctx, chartID, chart.Config, resp, 5*time.Minute)
 	}
 
