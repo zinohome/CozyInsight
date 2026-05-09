@@ -62,6 +62,7 @@ export default function ScreenDesigner() {
 
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [chartError, setChartError] = useState<string>('')
 
   // Fetch dashboard and load config
   const fetchDashboard = useCallback(async () => {
@@ -140,6 +141,7 @@ export default function ScreenDesigner() {
   // Load chart data and info for items
   useEffect(() => {
     const loadChartData = async () => {
+      setChartError('')
       let updated = false
 
       for (const item of items) {
@@ -156,7 +158,7 @@ export default function ScreenDesigner() {
             }
             updated = true
           } catch {
-            // Leave placeholder — UI shows '数据加载失败'
+            setChartError('图表数据加载失败')
           }
         }
 
@@ -169,7 +171,7 @@ export default function ScreenDesigner() {
             }
             updated = true
           } catch {
-            // Leave placeholder — UI shows '数据加载失败'
+            setChartError('图表数据加载失败')
           }
         }
       }
@@ -328,6 +330,14 @@ export default function ScreenDesigner() {
     return (
       <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>
         {error}
+      </div>
+    )
+  }
+
+  if (chartError) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>
+        {chartError}
       </div>
     )
   }
