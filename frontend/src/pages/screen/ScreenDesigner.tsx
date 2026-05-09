@@ -52,8 +52,13 @@ export default function ScreenDesigner() {
   const [scale, setScale] = useState(1)
 
   const [chartList, setChartList] = useState<Chart[]>([])
-  const [chartDataCache, setChartDataCache] = useState<ChartDataCache>({})
-  const [chartInfoCache, setChartInfoCache] = useState<ChartInfoCache>({})
+  const chartDataCacheRef = useRef<ChartDataCache>({})
+  const chartInfoCacheRef = useRef<ChartInfoCache>({})
+  const [cacheVersion, setCacheVersion] = useState(0)
+  const zIndexCounterRef = useRef(1)
+
+  // cacheVersion is intentionally unused in render; it only serves to force re-render when refs update
+  void cacheVersion
 
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -135,39 +140,42 @@ export default function ScreenDesigner() {
   // Load chart data and info for items
   useEffect(() => {
     const loadChartData = async () => {
-      const newDataCache: ChartDataCache = { ...chartDataCache }
-      const newInfoCache: ChartInfoCache = { ...chartInfoCache }
       let updated = false
 
       for (const item of items) {
-        if (!newDataCache[item.chartId]) {
+        if (!chartDataCacheRef.current[item.chartId]) {
           try {
             const response = await chartAPI.getData(item.chartId)
-            newDataCache[item.chartId] = {
-              data: response.data,
-              dimensions: response.dimensions,
-              metrics: response.metrics,
+            chartDataCacheRef.current = {
+              ...chartDataCacheRef.current,
+              [item.chartId]: {
+                data: response.data,
+                dimensions: response.dimensions,
+                metrics: response.metrics,
+              },
             }
             updated = true
           } catch {
-            // Leave placeholder
+            // Leave placeholder — UI shows '数据加载失败'
           }
         }
 
-        if (!newInfoCache[item.chartId]) {
+        if (!chartInfoCacheRef.current[item.chartId]) {
           try {
             const chart = await chartAPI.get(item.chartId)
-            newInfoCache[item.chartId] = chart
+            chartInfoCacheRef.current = {
+              ...chartInfoCacheRef.current,
+              [item.chartId]: chart,
+            }
             updated = true
           } catch {
-            // Leave placeholder
+            // Leave placeholder — UI shows '数据加载失败'
           }
         }
       }
 
       if (updated) {
-        setChartDataCache(newDataCache)
-        setChartInfoCache(newInfoCache)
+        setCacheVersion((v) => v + 1)
       }
     }
 
@@ -200,13 +208,47 @@ export default function ScreenDesigner() {
         y: 50,
         width: 400,
         height: 300,
-        zIndex: items.length + 1,
+        zIndex: zIndexCounterRef.current++,
       }
       setItems((prev) => [...prev, newItem])
       setSelectedItemId(newItem.instanceId)
       setAddModalOpen(false)
     },
-    [items.length]
+    []
+  )
+
+  const handleDragStop = useCallback(
+    (instanceId: string, _e: unknown, d: { x: number; y: number }) => {
+      updateItem(instanceId, { x: d.x, y: d.y })
+    },
+    [updateItem]
+  )
+
+  const handleResizeStop = useCallback(
+    (
+      instanceId: string,
+      _e: unknown,
+      _dir: unknown,
+      ref: { style: { width: string; height: string } },
+      _delta: unknown,
+      pos: { x: number; y: number }
+    ) => {
+      updateItem(instanceId, {
+        width: parseInt(ref.style.width),
+        height: parseInt(ref.style.height),
+        x: pos.x,
+        y: pos.y,
+      })
+    },
+    [updateItem]
+  )
+
+  const handleSelect = useCallback(
+    (instanceId: string, e: React.MouseEvent) => {
+      e.stopPropagation()
+      setSelectedItemId(instanceId)
+    },
+    []
   )
 
   const handleSave = useCallback(async () => {
@@ -241,35 +283,38 @@ export default function ScreenDesigner() {
   )
 
   // Add modal columns
-  const chartColumns = [
-    {
-      title: 'ID',
-      dataIndex: 'id',
-      key: 'id',
-      width: 80,
-    },
-    {
-      title: '标题',
-      dataIndex: 'title',
-      key: 'title',
-    },
-    {
-      title: '类型',
-      dataIndex: 'type',
-      key: 'type',
-      width: 100,
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 100,
-      render: (_: unknown, record: Chart) => (
-        <Button type="link" onClick={() => addChart(record.id)}>
-          添加
-        </Button>
-      ),
-    },
-  ]
+  const chartColumns = useMemo(
+    () => [
+      {
+        title: 'ID',
+        dataIndex: 'id',
+        key: 'id',
+        width: 80,
+      },
+      {
+        title: '标题',
+        dataIndex: 'title',
+        key: 'title',
+      },
+      {
+        title: '类型',
+        dataIndex: 'type',
+        key: 'type',
+        width: 100,
+      },
+      {
+        title: '操作',
+        key: 'action',
+        width: 100,
+        render: (_: unknown, record: Chart) => (
+          <Button type="link" onClick={() => addChart(record.id)}>
+            添加
+          </Button>
+        ),
+      },
+    ],
+    [addChart]
+  )
 
   if (loading) {
     return (
@@ -346,8 +391,8 @@ export default function ScreenDesigner() {
             onClick={() => setSelectedItemId(null)}
           >
             {items.map((item) => {
-              const chartInfo = chartInfoCache[item.chartId]
-              const chartData = chartDataCache[item.chartId]
+              const chartInfo = chartInfoCacheRef.current[item.chartId]
+              const chartData = chartDataCacheRef.current[item.chartId]
               const isSelected = item.instanceId === selectedItemId
 
               return (
@@ -355,21 +400,11 @@ export default function ScreenDesigner() {
                   key={item.instanceId}
                   position={{ x: item.x, y: item.y }}
                   size={{ width: item.width, height: item.height }}
-                  onDragStop={(_e: unknown, d: { x: number; y: number }) => {
-                    updateItem(item.instanceId, { x: d.x, y: d.y })
-                  }}
-                  onResizeStop={(_e: unknown, _dir: unknown, ref: { style: { width: string; height: string } }, _delta: unknown, pos: { x: number; y: number }) => {
-                    updateItem(item.instanceId, {
-                      width: parseInt(ref.style.width),
-                      height: parseInt(ref.style.height),
-                      x: pos.x,
-                      y: pos.y,
-                    })
-                  }}
-                  onClick={(e: React.MouseEvent) => {
-                    e.stopPropagation()
-                    setSelectedItemId(item.instanceId)
-                  }}
+                  onDragStop={(e, d) => handleDragStop(item.instanceId, e, d)}
+                  onResizeStop={(e, dir, ref, delta, pos) =>
+                    handleResizeStop(item.instanceId, e, dir, ref, delta, pos)
+                  }
+                  onClick={(e) => handleSelect(item.instanceId, e)}
                   style={{
                     zIndex: item.zIndex,
                     border: isSelected
@@ -493,7 +528,7 @@ export default function ScreenDesigner() {
                 bodyStyle={{ padding: 12 }}
               >
                 <Typography.Text style={{ color: '#ccc' }}>
-                  {chartInfoCache[selectedItem.chartId]?.title || `图表 #${selectedItem.chartId}`}
+                  {chartInfoCacheRef.current[selectedItem.chartId]?.title || `图表 #${selectedItem.chartId}`}
                 </Typography.Text>
                 <Button
                   danger
