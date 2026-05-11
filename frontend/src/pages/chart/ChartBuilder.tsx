@@ -15,6 +15,8 @@ export default function ChartBuilder() {
   const [chartType, setChartType] = useState<string>('bar')
   const [previewData, setPreviewData] = useState<ChartDataResponse | null>(null)
   const [loading, setLoading] = useState(false)
+  const [showJumpConfig, setShowJumpConfig] = useState(false)
+  const [showDrillConfig, setShowDrillConfig] = useState(false)
 
   const fetchChart = useCallback(async () => {
     if (!id) return
@@ -212,7 +214,148 @@ export default function ChartBuilder() {
               />
             </div>
             <Button type="primary" onClick={handlePreview} loading={loading}>预览</Button>
+            <Button onClick={() => setShowDrillConfig(v => !v)}>{showDrillConfig ? '隐藏' : '配置'}下钻</Button>
+            <Button onClick={() => setShowJumpConfig(v => !v)}>{showJumpConfig ? '隐藏' : '配置'}跳转</Button>
           </Space>
+
+          {showDrillConfig && (
+            <Card title="下钻配置" size="small" style={{ marginTop: 12 }}>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <div>
+                  <span>启用下钻: </span>
+                  <Radio.Group
+                    value={config.drillDown?.enabled ? 'yes' : 'no'}
+                    onChange={e => setConfig(prev => ({
+                      ...prev,
+                      drillDown: { ...prev.drillDown, enabled: e.target.value === 'yes', dimensions: prev.drillDown?.dimensions || [] },
+                    }))}
+                  >
+                    <Radio.Button value="yes">启用</Radio.Button>
+                    <Radio.Button value="no">禁用</Radio.Button>
+                  </Radio.Group>
+                </div>
+                {config.drillDown?.enabled && (
+                  <div>
+                    <span>下钻维度链（逗号分隔）: </span>
+                    <Input
+                      style={{ width: 300 }}
+                      value={config.drillDown?.dimensions?.join(',') || ''}
+                      onChange={e => setConfig(prev => ({
+                        ...prev,
+                        drillDown: {
+                          ...prev.drillDown,
+                          dimensions: e.target.value.split(',').map(s => s.trim()).filter(Boolean),
+                        },
+                      }))}
+                      placeholder="province,city,district"
+                    />
+                  </div>
+                )}
+              </Space>
+            </Card>
+          )}
+
+          {showJumpConfig && (
+            <Card title="跳转配置" size="small" style={{ marginTop: 12 }}>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <div>
+                  <span>启用跳转: </span>
+                  <Radio.Group
+                    value={config.jumpConfig?.enabled ? 'yes' : 'no'}
+                    onChange={e => setConfig(prev => ({
+                      ...prev,
+                      jumpConfig: { ...prev.jumpConfig, enabled: e.target.value === 'yes' },
+                    }))}
+                  >
+                    <Radio.Button value="yes">启用</Radio.Button>
+                    <Radio.Button value="no">禁用</Radio.Button>
+                  </Radio.Group>
+                </div>
+                {config.jumpConfig?.enabled && (
+                  <>
+                    <div>
+                      <span>跳转目标类型: </span>
+                      <Select
+                        style={{ width: 120 }}
+                        value={config.jumpConfig?.targetType || 'dashboard'}
+                        onChange={v => setConfig(prev => ({
+                          ...prev,
+                          jumpConfig: { ...prev.jumpConfig, targetType: v },
+                        }))}
+                        options={[
+                          { value: 'dashboard', label: '仪表板' },
+                          { value: 'screen', label: '大屏' },
+                          { value: 'url', label: '外部链接' },
+                        ]}
+                      />
+                    </div>
+                    {config.jumpConfig?.targetType === 'url' ? (
+                      <div>
+                        <span>URL: </span>
+                        <Input
+                          style={{ width: 300 }}
+                          value={config.jumpConfig?.url || ''}
+                          onChange={e => setConfig(prev => ({
+                            ...prev,
+                            jumpConfig: { ...prev.jumpConfig, url: e.target.value },
+                          }))}
+                          placeholder="https://example.com"
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        <span>目标ID: </span>
+                        <InputNumber
+                          style={{ width: 120 }}
+                          value={config.jumpConfig?.targetId || undefined}
+                          onChange={v => setConfig(prev => ({
+                            ...prev,
+                            jumpConfig: { ...prev.jumpConfig, targetId: v || undefined },
+                          }))}
+                        />
+                      </div>
+                    )}
+                    <div>
+                      <span>参数映射: </span>
+                      {(config.jumpConfig?.paramsMapping || []).map((mapping, idx) => (
+                        <Space key={idx} style={{ marginBottom: 4, display: 'flex' }}>
+                          <Input
+                            placeholder="源字段"
+                            style={{ width: 120 }}
+                            value={mapping.sourceField}
+                            onChange={e => {
+                              const next = [...(config.jumpConfig?.paramsMapping || [])]
+                              next[idx] = { ...next[idx], sourceField: e.target.value }
+                              setConfig(prev => ({ ...prev, jumpConfig: { ...prev.jumpConfig, paramsMapping: next } }))
+                            }}
+                          />
+                          <span>→</span>
+                          <Input
+                            placeholder="目标参数"
+                            style={{ width: 120 }}
+                            value={mapping.targetParam}
+                            onChange={e => {
+                              const next = [...(config.jumpConfig?.paramsMapping || [])]
+                              next[idx] = { ...next[idx], targetParam: e.target.value }
+                              setConfig(prev => ({ ...prev, jumpConfig: { ...prev.jumpConfig, paramsMapping: next } }))
+                            }}
+                          />
+                          <Button size="small" danger onClick={() => {
+                            const next = (config.jumpConfig?.paramsMapping || []).filter((_, i) => i !== idx)
+                            setConfig(prev => ({ ...prev, jumpConfig: { ...prev.jumpConfig, paramsMapping: next } }))
+                          }}>删除</Button>
+                        </Space>
+                      ))}
+                      <Button size="small" onClick={() => {
+                        const next = [...(config.jumpConfig?.paramsMapping || []), { sourceField: '', targetParam: '' }]
+                        setConfig(prev => ({ ...prev, jumpConfig: { ...prev.jumpConfig, paramsMapping: next } }))
+                      }}>添加映射</Button>
+                    </div>
+                  </>
+                )}
+              </Space>
+            </Card>
+          )}
         </Card>
 
         {previewData && (

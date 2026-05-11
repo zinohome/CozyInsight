@@ -17,8 +17,9 @@ import { Rnd } from 'react-rnd'
 import { dashboardAPI } from '@/api/dashboard'
 import { chartAPI } from '@/api/chart'
 import type { Dashboard, ScreenConfig, ScreenItem } from '@/types/dashboard'
-import type { Chart } from '@/types/chart'
+import type { Chart, ChartConfig, ChartEvent } from '@/types/chart'
 import ChartRenderer from '@/components/ChartRenderer'
+import { useChartLinkage } from '@/hooks/useChartLinkage'
 
 interface ChartDataCache {
   [chartId: number]: {
@@ -55,9 +56,26 @@ export default function ScreenDesigner() {
   const chartDataCacheRef = useRef<ChartDataCache>({})
   const chartInfoCacheRef = useRef<ChartInfoCache>({})
   const [cacheVersion, setCacheVersion] = useState(0)
-  // cacheVersion forces re-render when chart data refs update
   // eslint-disable-next-line @typescript-eslint/no-unused-expressions
   cacheVersion
+
+  const {
+    applyLinkage,
+    clearLinkage,
+    getEffectiveFilters,
+    applyDrill,
+    resetDrill,
+    getDrillState,
+  } = useChartLinkage()
+
+  const fetchItemData = useCallback(async (chartId: number) => {
+    const filters = getEffectiveFilters(String(chartId))
+    const drill = getDrillState(String(chartId))
+    const body: { runtimeFilters?: import('@/types/chart').ChartFilter[]; drillDimension?: string } = {}
+    if (filters.length > 0) body.runtimeFilters = filters
+    if (drill.dimension) body.drillDimension = drill.dimension
+    return await chartAPI.getData(chartId, body)
+  }, [getEffectiveFilters, getDrillState])
 
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -142,16 +160,72 @@ export default function ScreenDesigner() {
     fetchChartList()
   }, [fetchChartList])
 
+  const handleChartEvent = useCallback((chartId: number, event: ChartEvent) => {
+    const chart = chartInfoCacheRef.current[chartId]
+    if (!chart) return
+    const chartConfig: ChartConfig | undefined = JSON.parse(chart.config)
+
+    if (chartConfig?.jumpConfig?.enabled) {
+      const params = new URLSearchParams()
+      chartConfig.jumpConfig.paramsMapping?.forEach(mapping => {
+        params.append(mapping.targetParam, String(event.metrics?.[mapping.sourceField]))
+      })
+      if (chartConfig.jumpConfig.targetType === 'url' && chartConfig.jumpConfig.url) {
+        window.open(`${chartConfig.jumpConfig.url}?${params.toString()}`, '_blank')
+      } else if (chartConfig.jumpConfig.targetType === 'dashboard' && chartConfig.jumpConfig.targetId) {
+        navigate(`/dashboard/view/${chartConfig.jumpConfig.targetId}?${params.toString()}`)
+      } else if (chartConfig.jumpConfig.targetType === 'screen' && chartConfig.jumpConfig.targetId) {
+        navigate(`/screen/view/${chartConfig.jumpConfig.targetId}?${params.toString()}`)
+      }
+      return
+    }
+
+    if (chartConfig?.drillDown?.enabled && chartConfig.drillDown.dimensions && chartConfig.drillDown.dimensions.length > 1) {
+      const current = getDrillState(String(chartId))
+      const nextLevel = current.level + 1
+      if (chartConfig.drillDown.dimensions && nextLevel < chartConfig.drillDown.dimensions.length) {
+        applyDrill(String(chartId), chartConfig.drillDown.dimensions, nextLevel)
+        refreshAllData()
+        return
+      }
+    }
+
+    applyLinkage(String(chartId), event.dimensionField, event.dimensionValue)
+    refreshAllData()
+  }, [applyLinkage, applyDrill, getDrillState, navigate])
+
+  const refreshAllData = useCallback(async () => {
+    let updated = false
+    for (const item of items) {
+      try {
+        const response = await fetchItemData(item.chartId)
+        chartDataCacheRef.current = {
+          ...chartDataCacheRef.current,
+          [item.chartId]: {
+            data: response.data,
+            dimensions: response.dimensions,
+            metrics: response.metrics,
+          },
+        }
+        updated = true
+      } catch {
+        // per-chart error shown inline
+      }
+    }
+    if (updated) {
+      setCacheVersion((v) => v + 1)
+    }
+  }, [items, fetchItemData])
+
   // Load chart data and info for items
   useEffect(() => {
     const loadChartData = async () => {
-      // per-chart loading errors are shown inline, not globally
       let updated = false
 
       for (const item of items) {
         if (!chartDataCacheRef.current[item.chartId]) {
           try {
-            const response = await chartAPI.getData(item.chartId)
+            const response = await fetchItemData(item.chartId)
             chartDataCacheRef.current = {
               ...chartDataCacheRef.current,
               [item.chartId]: {
@@ -162,7 +236,7 @@ export default function ScreenDesigner() {
             }
             updated = true
           } catch {
-            // per-chart error shown inline; do not block entire designer
+            // per-chart error shown inline
           }
         }
 
@@ -175,7 +249,7 @@ export default function ScreenDesigner() {
             }
             updated = true
           } catch {
-            // per-chart error shown inline; do not block entire designer
+            // per-chart error shown inline
           }
         }
       }
@@ -188,7 +262,7 @@ export default function ScreenDesigner() {
     if (items.length > 0) {
       loadChartData()
     }
-  }, [items])
+  }, [items, fetchItemData])
 
   const updateCanvas = useCallback((patch: Partial<ScreenConfig['canvas']>) => {
     setCanvas((prev) => ({ ...prev, ...patch }))
@@ -367,6 +441,7 @@ export default function ScreenDesigner() {
           <Button type="primary" loading={saving} onClick={handleSave}>
             保存
           </Button>
+          <Button onClick={() => { clearLinkage(); resetDrill(); refreshAllData(); }}>清除联动</Button>
           <Button onClick={() => navigate('/dashboard')}>返回</Button>
         </Space>
       </div>
@@ -444,6 +519,7 @@ export default function ScreenDesigner() {
                           metrics: chartData.metrics,
                         }}
                         height={item.height}
+                        onEvent={(e) => handleChartEvent(item.chartId, e)}
                       />
                     ) : chartInfo && !chartData ? (
                       <div

@@ -38,18 +38,40 @@ export interface ChartOrder {
   direction: string
 }
 
+export interface ChartDrillConfig {
+  enabled?: boolean
+  dimensions?: string[]
+}
+
+export interface ChartJumpConfig {
+  enabled?: boolean
+  targetType?: 'dashboard' | 'screen' | 'url'
+  targetId?: number
+  url?: string
+  paramsMapping?: Array<{ sourceField: string; targetParam: string }>
+}
+
 export interface ChartConfig {
   dimensions: ChartDimension[]
   metrics: ChartMetric[]
   filters: ChartFilter[]
   orders: ChartOrder[]
   limit?: number
+  drillDown?: ChartDrillConfig
+  jumpConfig?: ChartJumpConfig
 }
 
 export interface ChartDataResponse {
   dimensions: string[]
   metrics: string[]
   data: Array<Record<string, unknown>>
+}
+
+export interface ChartLinkageRule {
+  sourceChartId: number
+  targetChartId: number
+  sourceField: string
+  targetField: string
 }
 
 export interface ChartEvent {

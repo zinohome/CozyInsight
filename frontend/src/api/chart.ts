@@ -7,5 +7,6 @@ export const chartAPI = {
   get: (id: number) => request.get<Chart>(`/api/v1/chart/${id}`),
   update: (id: number, data: Partial<CreateChartRequest>) => request.put(`/api/v1/chart/${id}`, data),
   remove: (id: number) => request.delete(`/api/v1/chart/${id}`),
-  getData: (id: number) => request.get<ChartDataResponse>(`/api/v1/chart/${id}/data`),
+  getData: (id: number, body?: { runtimeFilters?: import('@/types/chart').ChartFilter[]; drillDimension?: string }) =>
+    request.post<ChartDataResponse>(`/api/v1/chart/${id}/data`, body || {}),
 }

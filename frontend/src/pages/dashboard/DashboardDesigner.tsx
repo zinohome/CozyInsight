@@ -7,8 +7,9 @@ import { chartAPI } from '@/api/chart'
 import { exportAPI } from '@/api/export'
 import { shareAPI } from '@/api/share'
 import ChartRenderer from '@/components/ChartRenderer'
+import { useChartLinkage } from '@/hooks/useChartLinkage'
 import type { Dashboard } from '@/types/dashboard'
-import type { Chart, ChartDataResponse } from '@/types/chart'
+import type { Chart, ChartDataResponse, ChartConfig, ChartEvent } from '@/types/chart'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 
@@ -39,6 +40,24 @@ export default function DashboardDesigner() {
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [selectedChartId, setSelectedChartId] = useState<number | null>(null)
 
+  const {
+    applyLinkage,
+    clearLinkage,
+    getEffectiveFilters,
+    applyDrill,
+    resetDrill,
+    getDrillState,
+  } = useChartLinkage()
+
+  const fetchItemData = useCallback(async (chartId: number) => {
+    const filters = getEffectiveFilters(String(chartId))
+    const drill = getDrillState(String(chartId))
+    const body: { runtimeFilters?: import('@/types/chart').ChartFilter[]; drillDimension?: string } = {}
+    if (filters.length > 0) body.runtimeFilters = filters
+    if (drill.dimension) body.drillDimension = drill.dimension
+    return await chartAPI.getData(chartId, body)
+  }, [getEffectiveFilters, getDrillState])
+
   const fetchDashboard = useCallback(async () => {
     if (!id) return
     const numericId = Number(id)
@@ -58,13 +77,12 @@ export default function DashboardDesigner() {
       if (d.config) {
         const cfg = JSON.parse(d.config)
         if (cfg.items && Array.isArray(cfg.items)) {
-          // Restore chart info and fetch data for each item
           const restoredItems = await Promise.all(
             cfg.items.map(async (item: DashboardChartItem) => {
               const chart = allCharts.find(c => c.id === item.chartId)
               let data: ChartDataResponse | undefined
               try {
-                data = await chartAPI.getData(item.chartId)
+                data = await fetchItemData(item.chartId)
               } catch {
                 // ignore
               }
@@ -77,7 +95,7 @@ export default function DashboardDesigner() {
     } catch {
       message.error('加载仪表板失败')
     }
-  }, [id])
+  }, [id, navigate, fetchItemData])
 
   useEffect(() => {
     fetchDashboard()
@@ -100,7 +118,7 @@ export default function DashboardDesigner() {
 
     let data: ChartDataResponse | undefined
     try {
-      data = await chartAPI.getData(selectedChartId)
+      data = await fetchItemData(selectedChartId)
     } catch {
       message.warning('图表数据加载失败，将只显示占位')
     }
@@ -117,6 +135,44 @@ export default function DashboardDesigner() {
     setAddModalOpen(false)
     setSelectedChartId(null)
   }
+
+  const handleChartEvent = useCallback((chartId: number, event: ChartEvent) => {
+    const chart = charts.find(c => c.id === chartId)
+    if (!chart) return
+    const chartConfig: ChartConfig | undefined = JSON.parse(chart.config)
+
+    // Jump takes priority
+    if (chartConfig?.jumpConfig?.enabled) {
+      const params = new URLSearchParams()
+      chartConfig.jumpConfig.paramsMapping?.forEach(mapping => {
+        params.append(mapping.targetParam, String(event.metrics?.[mapping.sourceField]))
+      })
+      if (chartConfig.jumpConfig.targetType === 'url' && chartConfig.jumpConfig.url) {
+        window.open(`${chartConfig.jumpConfig.url}?${params.toString()}`, '_blank')
+      } else if (chartConfig.jumpConfig.targetType === 'dashboard' && chartConfig.jumpConfig.targetId) {
+        navigate(`/dashboard/view/${chartConfig.jumpConfig.targetId}?${params.toString()}`)
+      } else if (chartConfig.jumpConfig.targetType === 'screen' && chartConfig.jumpConfig.targetId) {
+        navigate(`/screen/view/${chartConfig.jumpConfig.targetId}?${params.toString()}`)
+      }
+      return
+    }
+
+    // Drill-down
+    if (chartConfig?.drillDown?.enabled && chartConfig.drillDown.dimensions && chartConfig.drillDown.dimensions.length > 1) {
+      const current = getDrillState(String(chartId))
+      const nextLevel = current.level + 1
+      if (chartConfig.drillDown.dimensions && nextLevel < chartConfig.drillDown.dimensions.length) {
+        applyDrill(String(chartId), chartConfig.drillDown.dimensions, nextLevel)
+        // Refresh data for all items after drill change
+        fetchDashboard()
+        return
+      }
+    }
+
+    // Linkage
+    applyLinkage(String(chartId), event.dimensionField, event.dimensionValue)
+    fetchDashboard()
+  }, [charts, applyLinkage, applyDrill, getDrillState, navigate, fetchDashboard])
 
   const handleRemoveChart = (instanceId: string) => {
     setItems(prev => prev.filter(i => i.instanceId !== instanceId))
@@ -159,6 +215,7 @@ export default function DashboardDesigner() {
           <Button onClick={() => setAddModalOpen(true)}>添加图表</Button>
           {dashboard?.type === 'screen' && <Button onClick={() => navigate(`/screen/view/${id}`)}>预览</Button>}
           <Button onClick={handleShare}>分享</Button>
+          <Button onClick={() => { clearLinkage(); resetDrill(); fetchDashboard(); }}>清除联动</Button>
           <Button type="primary" onClick={handleSave}>保存</Button>
           <Button onClick={() => navigate('/dashboard')}>返回</Button>
         </Space>
@@ -190,6 +247,7 @@ export default function DashboardDesigner() {
                     data={item.data.data}
                     config={{ dimensions: item.data.dimensions, metrics: item.data.metrics }}
                     height={item.layout.h * 30 - 60}
+                    onEvent={(e) => handleChartEvent(item.chartId, e)}
                   />
                 ) : (
                   <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
