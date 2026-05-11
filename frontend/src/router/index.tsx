@@ -8,6 +8,7 @@ import ChartPage from '@/pages/chart'
 import ChartBuilder from '@/pages/chart/ChartBuilder'
 import DashboardPage from '@/pages/dashboard'
 import DashboardDesigner from '@/pages/dashboard/DashboardDesigner'
+import DashboardView from '@/pages/dashboard/DashboardView'
 import ScreenDesigner from '@/pages/screen/ScreenDesigner'
 import UserPage from '@/pages/system/user'
 import RolePage from '@/pages/system/role'
@@ -49,6 +50,14 @@ export default function AppRoutes() {
     return (
       <Routes>
         <Route path="/screen/view/:id" element={<ScreenView />} />
+      </Routes>
+    )
+  }
+
+  if (location.pathname.startsWith('/dashboard/view/')) {
+    return (
+      <Routes>
+        <Route path="/dashboard/view/:id" element={<DashboardView />} />
       </Routes>
     )
   }

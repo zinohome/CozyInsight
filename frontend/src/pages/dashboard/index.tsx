@@ -65,6 +65,7 @@ export default function DashboardPage() {
       title: '操作',
       render: (_: unknown, record: Dashboard) => (
         <Space>
+          <Button type="link" onClick={() => navigate(record.type === 'screen' ? `/screen/view/${record.id}` : `/dashboard/view/${record.id}`)}>查看</Button>
           <Button type="link" onClick={() => navigate(record.type === 'screen' ? `/screen/designer/${record.id}` : `/dashboard/designer/${record.id}`)}>设计</Button>
           <Button type="link" danger onClick={() => handleDelete(record.id)}>删除</Button>
         </Space>

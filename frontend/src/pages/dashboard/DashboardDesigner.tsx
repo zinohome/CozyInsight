@@ -221,7 +221,7 @@ export default function DashboardDesigner() {
         <h3 style={{ margin: 0 }}>{dashboard?.title || '仪表板设计器'}</h3>
         <Space>
           <Button onClick={() => setAddModalOpen(true)}>添加图表</Button>
-          {dashboard?.type === 'screen' && <Button onClick={() => navigate(`/screen/view/${id}`)}>预览</Button>}
+          <Button onClick={() => navigate(`/dashboard/view/${id}`)}>预览</Button>
           <Button onClick={() => setLinkageModalOpen(true)}>联动配置</Button>
           <Button onClick={handleShare}>分享</Button>
           <Button onClick={() => { clearLinkage(); resetDrill(); fetchDashboard(); }}>清除联动</Button>
