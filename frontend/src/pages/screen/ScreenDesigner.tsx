@@ -19,6 +19,7 @@ import { chartAPI } from '@/api/chart'
 import type { Dashboard, ScreenConfig, ScreenItem } from '@/types/dashboard'
 import type { Chart, ChartConfig, ChartEvent } from '@/types/chart'
 import ChartRenderer from '@/components/ChartRenderer'
+import DrillBreadcrumb from '@/components/DrillBreadcrumb'
 import { useChartLinkage } from '@/hooks/useChartLinkage'
 
 interface ChartDataCache {
@@ -510,6 +511,24 @@ export default function ScreenDesigner() {
                       position: 'relative',
                     }}
                   >
+                    {(() => {
+                      const chartConfig: ChartConfig | undefined = chartInfo?.config ? JSON.parse(chartInfo.config) : undefined
+                      const drillConfig = chartConfig?.drillDown
+                      if (drillConfig?.enabled && drillConfig.dimensions && drillConfig.dimensions.length > 1 && chartData) {
+                        const drill = getDrillState(String(item.chartId))
+                        return (
+                          <DrillBreadcrumb
+                            dimensions={drillConfig.dimensions}
+                            currentLevel={drill.level}
+                            onDrillUp={(level) => {
+                              applyDrill(String(item.chartId), drillConfig.dimensions!, level)
+                              refreshAllData()
+                            }}
+                          />
+                        )
+                      }
+                      return null
+                    })()}
                     {chartInfo && chartData ? (
                       <ChartRenderer
                         type={chartInfo.type}

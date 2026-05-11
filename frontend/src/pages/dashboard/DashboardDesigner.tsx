@@ -7,9 +7,11 @@ import { chartAPI } from '@/api/chart'
 import { exportAPI } from '@/api/export'
 import { shareAPI } from '@/api/share'
 import ChartRenderer from '@/components/ChartRenderer'
+import DrillBreadcrumb from '@/components/DrillBreadcrumb'
+import LinkagePanel from '@/components/LinkagePanel'
 import { useChartLinkage } from '@/hooks/useChartLinkage'
 import type { Dashboard } from '@/types/dashboard'
-import type { Chart, ChartDataResponse, ChartConfig, ChartEvent } from '@/types/chart'
+import type { Chart, ChartDataResponse, ChartConfig, ChartEvent, ChartLinkageRule } from '@/types/chart'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 
@@ -39,6 +41,8 @@ export default function DashboardDesigner() {
   const [charts, setCharts] = useState<Chart[]>([])
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [selectedChartId, setSelectedChartId] = useState<number | null>(null)
+  const [linkageModalOpen, setLinkageModalOpen] = useState(false)
+  const [linkageRules, setLinkageRules] = useState<ChartLinkageRule[]>([])
 
   const {
     applyLinkage,
@@ -90,6 +94,9 @@ export default function DashboardDesigner() {
             })
           )
           setItems(restoredItems)
+        }
+        if (cfg.linkageRules && Array.isArray(cfg.linkageRules)) {
+          setLinkageRules(cfg.linkageRules)
         }
       }
     } catch {
@@ -181,7 +188,8 @@ export default function DashboardDesigner() {
   const handleSave = async () => {
     if (!dashboard) return
     const config = JSON.stringify({
-      items: items.map(({ instanceId, chartId, layout }) => ({ instanceId, chartId, layout }))
+      items: items.map(({ instanceId, chartId, layout }) => ({ instanceId, chartId, layout })),
+      linkageRules,
     })
     try {
       await dashboardAPI.update(dashboard.id, { config })
@@ -214,6 +222,7 @@ export default function DashboardDesigner() {
         <Space>
           <Button onClick={() => setAddModalOpen(true)}>添加图表</Button>
           {dashboard?.type === 'screen' && <Button onClick={() => navigate(`/screen/view/${id}`)}>预览</Button>}
+          <Button onClick={() => setLinkageModalOpen(true)}>联动配置</Button>
           <Button onClick={handleShare}>分享</Button>
           <Button onClick={() => { clearLinkage(); resetDrill(); fetchDashboard(); }}>清除联动</Button>
           <Button type="primary" onClick={handleSave}>保存</Button>
@@ -239,6 +248,26 @@ export default function DashboardDesigner() {
                   <Button type="text" size="small" onClick={() => exportAPI.downloadCSV(item.chartId)}>导出 CSV</Button>
                   <Button type="text" size="small" danger onClick={() => handleRemoveChart(item.instanceId)}>移除</Button>
                 </Space>
+              </div>
+              <div style={{ padding: '4px 8px' }}>
+                {(() => {
+                  const chartConfig: ChartConfig | undefined = item.chart?.config ? JSON.parse(item.chart.config) : undefined
+                  const drillConfig = chartConfig?.drillDown
+                  if (drillConfig?.enabled && drillConfig.dimensions && drillConfig.dimensions.length > 1) {
+                    const drill = getDrillState(String(item.chartId))
+                    return (
+                      <DrillBreadcrumb
+                        dimensions={drillConfig.dimensions}
+                        currentLevel={drill.level}
+                        onDrillUp={(level) => {
+                          applyDrill(String(item.chartId), drillConfig.dimensions!, level)
+                          fetchDashboard()
+                        }}
+                      />
+                    )
+                  }
+                  return null
+                })()}
               </div>
               <div style={{ padding: 8, height: 'calc(100% - 40px)' }}>
                 {item.data ? (
@@ -266,6 +295,20 @@ export default function DashboardDesigner() {
           placeholder="选择图表"
           options={charts.map(c => ({ value: c.id, label: c.title }))}
           onChange={v => setSelectedChartId(v)}
+        />
+      </Modal>
+
+      <Modal
+        title="联动配置"
+        open={linkageModalOpen}
+        onOk={() => setLinkageModalOpen(false)}
+        onCancel={() => setLinkageModalOpen(false)}
+        width={600}
+      >
+        <LinkagePanel
+          charts={charts.map(c => ({ id: c.id, title: c.title }))}
+          rules={linkageRules}
+          onChange={setLinkageRules}
         />
       </Modal>
     </div>
