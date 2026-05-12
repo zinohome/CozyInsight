@@ -16,6 +16,7 @@ import (
 	"cozy-insight/api/v1"
 	"cozy-insight/internal/middleware"
 	"cozy-insight/internal/repository"
+	"cozy-insight/pkg/cache"
 	"cozy-insight/pkg/config"
 	"cozy-insight/pkg/database"
 	"cozy-insight/pkg/logger"
@@ -49,6 +50,9 @@ func main() {
 		MaxAge:           12 * time.Hour,
 	}))
 
+	redisAddr := fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port)
+	redisClient := cache.NewRedisClient(redisAddr)
+
 	operLogRepo := repository.NewOperationLogRepository(db)
 	r.Use(middleware.OperationLog(operLogRepo))
 
@@ -56,7 +60,7 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	v1.Setup(db, cfg, r)
+	v1.Setup(db, cfg, r, redisClient)
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),

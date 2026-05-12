@@ -10,6 +10,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
   const [createType, setCreateType] = useState<'dashboard' | 'screen'>('dashboard')
+  const [searchText, setSearchText] = useState('')
   const [form] = Form.useForm()
 
   const fetchList = async () => {
@@ -56,6 +57,11 @@ export default function DashboardPage() {
     setModalVisible(true)
   }
 
+  const filteredList = useMemo(() => {
+    if (!searchText) return list
+    return list.filter(d => d.title.toLowerCase().includes(searchText.toLowerCase()))
+  }, [list, searchText])
+
   const columns = useMemo(() => [
     { title: '标题', dataIndex: 'title' },
     { title: '类型', dataIndex: 'type', render: (type: 'dashboard' | 'screen') => (type === 'screen' ? <Tag color="purple">数据大屏</Tag> : <Tag color="blue">仪表板</Tag>) },
@@ -75,13 +81,20 @@ export default function DashboardPage() {
 
   return (
     <div style={{ padding: 24 }}>
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Space>
           <Button type="primary" onClick={() => openCreateModal('dashboard')}>新建仪表板</Button>
           <Button type="primary" onClick={() => openCreateModal('screen')}>新建数据大屏</Button>
         </Space>
+        <Input.Search
+          placeholder="搜索标题"
+          allowClear
+          style={{ width: 250 }}
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+        />
       </div>
-      <Table rowKey="id" columns={columns} dataSource={list} loading={loading} />
+      <Table rowKey="id" columns={columns} dataSource={filteredList} loading={loading} pagination={{ pageSize: 10, showSizeChanger: true }} />
       <Modal title={createType === 'screen' ? '新建数据大屏' : '新建仪表板'} open={modalVisible} onCancel={() => setModalVisible(false)} footer={null}>
         <Form form={form} onFinish={handleCreate} layout="vertical">
           <Form.Item name="title" label="标题" rules={[{ required: true }]}>

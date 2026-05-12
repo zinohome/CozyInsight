@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Button, message, Modal, Select, Space } from 'antd'
+import { Button, message, Modal, Select, Space, Input, InputNumber, Table, Tag, CopyOutlined } from 'antd'
 import { Responsive, WidthProvider } from 'react-grid-layout'
 import { dashboardAPI } from '@/api/dashboard'
 import { chartAPI } from '@/api/chart'
@@ -43,6 +43,19 @@ export default function DashboardDesigner() {
   const [selectedChartId, setSelectedChartId] = useState<number | null>(null)
   const [linkageModalOpen, setLinkageModalOpen] = useState(false)
   const [linkageRules, setLinkageRules] = useState<ChartLinkageRule[]>([])
+  const [shareModalOpen, setShareModalOpen] = useState(false)
+  const [shareConfigOpen, setShareConfigOpen] = useState(false)
+  const [sharePassword, setSharePassword] = useState('')
+  const [shareExpireHours, setShareExpireHours] = useState<number | null>(null)
+  const [shareLinks, setShareLinks] = useState<Array<{
+    id: number
+    token: string
+    resourceType: string
+    resourceId: number
+    expireAt?: string
+    password?: string
+    createdAt: string
+  }>>([])
 
   const {
     applyLinkage,
@@ -202,17 +215,37 @@ export default function DashboardDesigner() {
   const handleShare = async () => {
     if (!dashboard) return
     try {
-      const res = await shareAPI.create(dashboard.id)
+      const res = await shareAPI.create(dashboard.id, sharePassword || undefined, shareExpireHours || undefined)
       if (res.code === 200) {
         const shareUrl = `${window.location.origin}/share/${res.data}`
         await navigator.clipboard.writeText(shareUrl)
         message.success(`分享链接已复制: ${shareUrl}`)
+        setShareConfigOpen(false)
+        setSharePassword('')
+        setShareExpireHours(null)
+        loadShareLinks()
       } else {
         message.error(res.error || '分享失败')
       }
     } catch {
       message.error('分享失败')
     }
+  }
+
+  const loadShareLinks = async () => {
+    try {
+      const res = await shareAPI.list()
+      if (res.code === 200) {
+        setShareLinks((res.data || []).filter((l: { resourceId: number }) => l.resourceId === dashboard?.id))
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const openShareModal = () => {
+    setShareModalOpen(true)
+    loadShareLinks()
   }
 
   return (
@@ -223,7 +256,7 @@ export default function DashboardDesigner() {
           <Button onClick={() => setAddModalOpen(true)}>添加图表</Button>
           <Button onClick={() => navigate(`/dashboard/view/${id}`)}>预览</Button>
           <Button onClick={() => setLinkageModalOpen(true)}>联动配置</Button>
-          <Button onClick={handleShare}>分享</Button>
+          <Button onClick={openShareModal}>分享</Button>
           <Button onClick={() => { clearLinkage(); resetDrill(); fetchDashboard(); }}>清除联动</Button>
           <Button type="primary" onClick={handleSave}>保存</Button>
           <Button onClick={() => navigate('/dashboard')}>返回</Button>
@@ -246,6 +279,7 @@ export default function DashboardDesigner() {
                 <span style={{ fontWeight: 'bold' }}>{item.chart?.title || '图表'}</span>
                 <Space>
                   <Button type="text" size="small" onClick={() => exportAPI.downloadCSV(item.chartId)}>导出 CSV</Button>
+                  <Button type="text" size="small" onClick={() => exportAPI.downloadExcel(item.chartId)}>导出 Excel</Button>
                   <Button type="text" size="small" danger onClick={() => handleRemoveChart(item.instanceId)}>移除</Button>
                 </Space>
               </div>
@@ -310,6 +344,84 @@ export default function DashboardDesigner() {
           rules={linkageRules}
           onChange={setLinkageRules}
         />
+      </Modal>
+
+      <Modal
+        title="分享管理"
+        open={shareModalOpen}
+        onCancel={() => setShareModalOpen(false)}
+        footer={[
+          <Button key="create" type="primary" onClick={() => setShareConfigOpen(true)}>新建分享</Button>,
+        ]}
+        width={700}
+      >
+        <Table
+          rowKey="id"
+          dataSource={shareLinks}
+          pagination={false}
+          columns={[
+            { title: 'Token', dataIndex: 'token', render: (t: string) => t.slice(0, 16) + '...' },
+            { title: '类型', dataIndex: 'resourceType' },
+            {
+              title: '过期时间',
+              dataIndex: 'expireAt',
+              render: (v?: string) => (v ? new Date(v).toLocaleString() : <Tag>永久有效</Tag>),
+            },
+            {
+              title: '密码',
+              dataIndex: 'password',
+              render: (v?: string) => (v ? <Tag color="orange">有密码</Tag> : <Tag>无密码</Tag>),
+            },
+            {
+              title: '操作',
+              render: (_: unknown, record: { token: string }) => (
+                <Space>
+                  <Button
+                    type="text"
+                    icon={<CopyOutlined />}
+                    onClick={() => {
+                      const url = `${window.location.origin}/share/${record.token}`
+                      navigator.clipboard.writeText(url)
+                      message.success('链接已复制')
+                    }}
+                  >
+                    复制链接
+                  </Button>
+                </Space>
+              ),
+            },
+          ]}
+        />
+      </Modal>
+
+      <Modal
+        title="新建分享"
+        open={shareConfigOpen}
+        onCancel={() => setShareConfigOpen(false)}
+        onOk={handleShare}
+        okText="创建"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div>
+            <label>访问密码（可选）</label>
+            <Input
+              placeholder="留空表示不需要密码"
+              value={sharePassword}
+              onChange={(e) => setSharePassword(e.target.value)}
+              style={{ marginTop: 8 }}
+            />
+          </div>
+          <div>
+            <label>有效时长（小时，可选）</label>
+            <InputNumber
+              placeholder="留空表示永久有效"
+              min={1}
+              value={shareExpireHours}
+              onChange={(v) => setShareExpireHours(v)}
+              style={{ width: '100%', marginTop: 8 }}
+            />
+          </div>
+        </div>
       </Modal>
     </div>
   )

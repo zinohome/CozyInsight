@@ -20,19 +20,49 @@ func NewShareLinkService(repo *repository.ShareLinkRepository, dashboardRepo *re
 	return &ShareLinkService{repo: repo, dashboardRepo: dashboardRepo}
 }
 
-func (s *ShareLinkService) Create(ctx context.Context, resourceType string, resourceID uint64, userID uint64) (*model.ShareLink, error) {
+func (s *ShareLinkService) Create(ctx context.Context, resourceType string, resourceID uint64, userID uint64, password string, expireHours int) (*model.ShareLink, error) {
 	token := uuid.New().String()
 	link := &model.ShareLink{
 		Token:        token,
 		ResourceType: resourceType,
 		ResourceID:   resourceID,
 		CreatedBy:    userID,
+		Password:     password,
 		Status:       1,
+	}
+	if expireHours > 0 {
+		t := time.Now().Add(time.Duration(expireHours) * time.Hour)
+		link.ExpireAt = &t
 	}
 	if err := s.repo.Create(ctx, link); err != nil {
 		return nil, fmt.Errorf("create share link failed: %w", err)
 	}
 	return link, nil
+}
+
+func (s *ShareLinkService) GetDashboard(ctx context.Context, token string, password string) (*model.Dashboard, error) {
+	link, err := s.repo.FindByToken(ctx, token)
+	if err != nil {
+		return nil, fmt.Errorf("share link not found: %w", err)
+	}
+	if link.ExpireAt != nil && link.ExpireAt.Before(time.Now()) {
+		return nil, fmt.Errorf("share link expired")
+	}
+	if link.Password != "" && link.Password != password {
+		return nil, fmt.Errorf("invalid password")
+	}
+	if link.ResourceType != "dashboard" {
+		return nil, fmt.Errorf("invalid resource type")
+	}
+	dashboard, err := s.dashboardRepo.FindByID(ctx, link.ResourceID)
+	if err != nil {
+		return nil, fmt.Errorf("dashboard not found: %w", err)
+	}
+	return dashboard, nil
+}
+
+func (s *ShareLinkService) ListByUser(ctx context.Context, userID uint64) ([]model.ShareLink, error) {
+	return s.repo.ListByUser(ctx, userID)
 }
 
 func (s *ShareLinkService) GetDashboard(ctx context.Context, token string) (*model.Dashboard, error) {
@@ -43,7 +73,7 @@ func (s *ShareLinkService) GetDashboard(ctx context.Context, token string) (*mod
 	if link.ExpireAt != nil && link.ExpireAt.Before(time.Now()) {
 		return nil, fmt.Errorf("share link expired")
 	}
-	if link.ResourceType != "dashboard" {
+	if link.ResourceType != "dashboard" && link.ResourceType != "screen" {
 		return nil, fmt.Errorf("invalid resource type")
 	}
 	dashboard, err := s.dashboardRepo.FindByID(ctx, link.ResourceID)

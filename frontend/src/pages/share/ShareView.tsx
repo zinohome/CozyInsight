@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
+import { Input, Button, message } from 'antd'
+import { LockOutlined } from '@ant-design/icons'
 import { shareAPI } from '@/api/share'
 import { chartAPI } from '@/api/chart'
 import ChartRenderer from '@/components/ChartRenderer'
@@ -10,21 +12,55 @@ import type { Chart, ChartDataResponse } from '@/types/chart'
 export default function ShareView() {
   const { token } = useParams<{ token: string }>()
   const [dashboard, setDashboard] = useState<Dashboard | null>(null)
+  const [password, setPassword] = useState('')
+  const [needPassword, setNeedPassword] = useState(false)
+  const [error, setError] = useState('')
 
   const getDashboard = useCallback(async () => {
-    const res = await shareAPI.get(token!)
+    const res = await shareAPI.get(token!, password || undefined)
     if (res.code !== 200 || !res.data) {
-      throw new Error(res.error || '分享链接无效或已过期')
+      const errMsg = res.error || '分享链接无效或已过期'
+      if (errMsg.includes('password') || errMsg.includes('密码')) {
+        setNeedPassword(true)
+      }
+      throw new Error(errMsg)
     }
     const d = res.data as Dashboard
     setDashboard(d)
+    setNeedPassword(false)
     return d
-  }, [token])
+  }, [token, password])
 
-  const { items, canvas, scale, error, loading } = useScreenData(getDashboard)
+  const { items, canvas, scale, error: screenError, loading } = useScreenData(getDashboard)
+
+  if (needPassword) {
+    return (
+      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f5f5' }}>
+        <div style={{ width: 400, padding: 40, background: '#fff', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+          <h2 style={{ textAlign: 'center', marginBottom: 24 }}>
+            <LockOutlined style={{ marginRight: 8, color: '#1890ff' }} />
+            请输入访问密码
+          </h2>
+          <Input.Password
+            placeholder="访问密码"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onPressEnter={() => {
+              setNeedPassword(false)
+              getDashboard()
+            }}
+            style={{ marginBottom: 16 }}
+          />
+          <Button type="primary" block onClick={() => { setNeedPassword(false); getDashboard() }}>
+            进入
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>加载中...</div>
-  if (error) return <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>{error}</div>
+  if (error || screenError) return <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>{error || screenError}</div>
   if (!dashboard) return null
 
   if (dashboard.type === 'screen') {
@@ -56,7 +92,6 @@ export default function ShareView() {
     )
   }
 
-  // Grid dashboard share view
   return <DashboardShareView dashboard={dashboard} />
 }
 

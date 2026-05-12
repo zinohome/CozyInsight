@@ -1,17 +1,22 @@
 import { useState, useEffect } from 'react'
-import { Table, Button, Space, Tag, Modal, Form, Input, message, Tree } from 'antd'
+import { Table, Button, Space, Tag, Modal, Form, Input, message, Tree, Transfer } from 'antd'
 import type { TreeDataNode } from 'antd'
 import { roleAPI } from '@/api/role'
+import { userAPI } from '@/api/user'
 import type { Role, Menu } from '@/types/role'
+import type { User } from '@/types/user'
 
 export default function RolePage() {
   const [list, setList] = useState<Role[]>([])
   const [menus, setMenus] = useState<Menu[]>([])
+  const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
   const [permModal, setPermModal] = useState(false)
+  const [userModal, setUserModal] = useState(false)
   const [currentRole, setCurrentRole] = useState<Role | null>(null)
   const [selectedMenus, setSelectedMenus] = useState<string[]>([])
+  const [selectedUsers, setSelectedUsers] = useState<number[]>([])
   const [form] = Form.useForm()
 
   const fetchList = async () => {
@@ -75,6 +80,37 @@ export default function RolePage() {
     }
   }
 
+  const openUserAssign = async (role: Role) => {
+    setCurrentRole(role)
+    try {
+      const allUsers = await userAPI.list()
+      setUsers(allUsers)
+      // Select users that already have this role - simplified: just select none for now
+      setSelectedUsers([])
+    } catch {
+      message.error('获取用户列表失败')
+      setUsers([])
+      setSelectedUsers([])
+    }
+    setUserModal(true)
+  }
+
+  const handleSaveUserAssign = async () => {
+    if (!currentRole) return
+    try {
+      await Promise.all(
+        selectedUsers.map(async (userId) => {
+          await roleAPI.setUserRoles(userId, [currentRole.id])
+        })
+      )
+      message.success('用户分配成功')
+      setUserModal(false)
+      setSelectedUsers([])
+    } catch {
+      message.error('用户分配失败')
+    }
+  }
+
   const buildTree = (menuList: Menu[]): TreeDataNode[] => {
     const map = new Map<number, TreeDataNode>()
     menuList.forEach((m) => {
@@ -105,6 +141,7 @@ export default function RolePage() {
       title: '操作',
       render: (_: unknown, record: Role) => (
         <Space>
+          <Button type="link" onClick={() => openUserAssign(record)}>分配用户</Button>
           <Button type="link" onClick={() => openPermission(record)}>权限</Button>
           <Button type="link" danger onClick={() => handleDelete(record.id)}>删除</Button>
         </Space>
@@ -140,6 +177,23 @@ export default function RolePage() {
           treeData={buildTree(menus)}
           checkedKeys={selectedMenus}
           onCheck={(keys) => setSelectedMenus(keys as string[])}
+        />
+      </Modal>
+
+      <Modal
+        title={`分配用户 - ${currentRole?.name || ''}`}
+        open={userModal}
+        onCancel={() => { setUserModal(false); setSelectedUsers([]) }}
+        onOk={handleSaveUserAssign}
+        width={500}
+      >
+        <Transfer
+          dataSource={users.map((u) => ({ key: u.id, title: u.username, description: u.nickName || u.email }))}
+          titles={['未分配', '已分配']}
+          targetKeys={selectedUsers.map(String)}
+          onChange={(keys) => setSelectedUsers(keys.map(Number))}
+          render={(item) => item.title}
+          oneWay
         />
       </Modal>
     </div>

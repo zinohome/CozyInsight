@@ -1,0 +1,1 @@
+ALTER TABLE share_links ADD COLUMN password VARCHAR(64) DEFAULT NULL COMMENT '访问密码';

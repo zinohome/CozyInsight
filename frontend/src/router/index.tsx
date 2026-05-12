@@ -1,6 +1,8 @@
 import { Routes, Route, useLocation } from 'react-router-dom'
 import LoginPage from '@/pages/login'
 import WorkbenchPage from '@/pages/workbench'
+import ProfilePage from '@/pages/profile'
+import NotFoundPage from '@/pages/404'
 import ShareView from '@/pages/share/ShareView'
 import ScreenView from '@/pages/screen/ScreenView'
 import DatasourcePage from '@/pages/datasource'
@@ -21,6 +23,7 @@ function LayoutRoutes() {
     <Layout>
       <Routes>
         <Route path="/" element={<WorkbenchPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
         <Route path="/datasource" element={<DatasourcePage />} />
         <Route path="/dataset" element={<DatasetPage />} />
         <Route path="/chart" element={<ChartPage />} />
@@ -31,9 +34,10 @@ function LayoutRoutes() {
         <Route path="/system/user" element={<UserPage />} />
         <Route path="/system/role" element={<RolePage />} />
         <Route path="/system/log" element={<LogPage />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Layout>
-  )
+  )}
 }
 
 export default function AppRoutes() {

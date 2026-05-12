@@ -14,10 +14,12 @@ import {
 } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/store/auth'
+import AppBreadcrumb from '@/components/Breadcrumb'
+import MessageCenter from '@/components/MessageCenter'
 
 const { Header, Sider, Content } = Layout
 
-const menuItems = [
+const allMenuItems = [
   { key: '/', icon: <DashboardOutlined />, label: '工作台' },
   { key: '/datasource', icon: <DatabaseOutlined />, label: '数据源' },
   { key: '/dataset', icon: <TableOutlined />, label: '数据集' },
@@ -40,6 +42,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const navigate = useNavigate()
   const location = useLocation()
   const logout = useAuthStore((s) => s.logout)
+  const user = useAuthStore((s) => s.user)
   const {
     token: { colorBgContainer },
   } = theme.useToken()
@@ -49,6 +52,8 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       navigate(key)
     }
   }
+
+  const menuItems = user?.isAdmin ? allMenuItems : allMenuItems.filter(item => item.key !== 'system')
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -64,10 +69,13 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         />
       </Sider>
       <Layout>
-        <Header style={{ padding: 0, background: colorBgContainer, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', paddingRight: 24 }}>
+        <Header style={{ padding: 0, background: colorBgContainer, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', paddingRight: 24, gap: 16 }}>
+          <MessageCenter />
+          <span style={{ color: '#666' }}>{user?.nickName || user?.username || '用户'}</span>
           <Dropdown
             menu={{
               items: [
+                { key: 'profile', icon: <UserOutlined />, label: '个人中心', onClick: () => navigate('/profile') },
                 { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: logout },
               ],
             }}
@@ -75,7 +83,10 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             <Avatar icon={<UserOutlined />} style={{ cursor: 'pointer' }} />
           </Dropdown>
         </Header>
-        <Content style={{ margin: 16, background: '#fff', borderRadius: 8 }}>{children}</Content>
+        <Content style={{ margin: 16, background: '#fff', borderRadius: 8, padding: 16 }}>
+          <AppBreadcrumb />
+          {children}
+        </Content>
       </Layout>
     </Layout>
   )

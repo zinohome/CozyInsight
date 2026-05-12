@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Table, Button, Space, Tag, Modal, Form, Input, Select, message } from 'antd'
+import { Table, Button, Space, Tag, Modal, Form, Input, Select, message, Tooltip } from 'antd'
+import { CopyOutlined } from '@ant-design/icons'
 import { chartAPI } from '@/api/chart'
 import { datasetAPI } from '@/api/dataset'
 import type { Chart } from '@/types/chart'
@@ -12,6 +13,7 @@ export default function ChartPage() {
   const [datasets, setDatasets] = useState<Dataset[]>([])
   const [loading, setLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
+  const [searchText, setSearchText] = useState('')
   const [form] = Form.useForm()
 
   const fetchList = async () => {
@@ -53,6 +55,23 @@ export default function ChartPage() {
     }
   }
 
+  const handleCopy = async (record: Chart) => {
+    try {
+      await chartAPI.create({
+        title: `${record.title} - 复制`,
+        type: record.type,
+        datasetId: record.datasetId,
+        config: record.config || '{}',
+      })
+      message.success('复制成功')
+      fetchList()
+    } catch {
+      message.error('复制失败')
+    }
+  }
+
+  const filteredList = list.filter(c => !searchText || c.title.toLowerCase().includes(searchText.toLowerCase()))
+
   const columns = [
     { title: '标题', dataIndex: 'title' },
     { title: '类型', dataIndex: 'type', render: (type: string) => <Tag>{type}</Tag> },
@@ -63,6 +82,9 @@ export default function ChartPage() {
       render: (_: unknown, record: Chart) => (
         <Space>
           <Button type="link" onClick={() => navigate(`/chart/builder/${record.id}`)}>编辑</Button>
+          <Tooltip title="复制">
+            <Button type="link" icon={<CopyOutlined />} onClick={() => handleCopy(record)}>复制</Button>
+          </Tooltip>
           <Button type="link" danger onClick={() => handleDelete(record.id)}>删除</Button>
         </Space>
       ),
@@ -71,10 +93,17 @@ export default function ChartPage() {
 
   return (
     <div style={{ padding: 24 }}>
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Button type="primary" onClick={() => setModalVisible(true)}>新建图表</Button>
+        <Input.Search
+          placeholder="搜索标题"
+          allowClear
+          style={{ width: 250 }}
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+        />
       </div>
-      <Table rowKey="id" columns={columns} dataSource={list} loading={loading} />
+      <Table rowKey="id" columns={columns} dataSource={filteredList} loading={loading} pagination={{ pageSize: 10, showSizeChanger: true }} />
       <Modal title="新建图表" open={modalVisible} onCancel={() => setModalVisible(false)} footer={null}>
         <Form form={form} onFinish={handleCreate} layout="vertical">
           <Form.Item name="title" label="标题" rules={[{ required: true }]}>

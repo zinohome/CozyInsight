@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -99,7 +100,7 @@ func (s *DashboardService) Delete(ctx context.Context, id uint64, userID uint64)
 	return s.repo.Delete(ctx, id)
 }
 
-func (s *DashboardService) EnableShare(ctx context.Context, id uint64, userID uint64) (string, error) {
+func (s *DashboardService) EnableShare(ctx context.Context, id uint64, userID uint64, password string, expireHours int) (string, error) {
 	d, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return "", err
@@ -123,7 +124,12 @@ func (s *DashboardService) EnableShare(ctx context.Context, id uint64, userID ui
 		ResourceType: d.Type,
 		ResourceID:   id,
 		CreatedBy:    userID,
+		Password:     password,
 		Status:       1,
+	}
+	if expireHours > 0 {
+		t := time.Now().Add(time.Duration(expireHours) * time.Hour)
+		link.ExpireAt = &t
 	}
 	if err := s.shareLinkRepo.Create(ctx, link); err != nil {
 		return "", err

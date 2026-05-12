@@ -54,3 +54,12 @@ func (r *ShareLinkRepository) ListByResource(ctx context.Context, resourceType s
 	}
 	return links, nil
 }
+
+func (r *ShareLinkRepository) ListByUser(ctx context.Context, userID uint64) ([]model.ShareLink, error) {
+	var links []model.ShareLink
+	query := `SELECT * FROM share_links WHERE created_by = ? AND status = 1 ORDER BY created_at DESC`
+	if err := r.db.SelectContext(ctx, &links, query, userID); err != nil {
+		return nil, fmt.Errorf("list share links by user failed: %w", err)
+	}
+	return links, nil
+}

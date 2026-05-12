@@ -11,6 +11,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/microsoft/go-mssqldb"
 )
 
 // DatasourceConnector abstracts connections to external databases.
@@ -41,6 +42,8 @@ func NewConnector(dsType string) (DatasourceConnector, error) {
 		return &sqliteConnector{}, nil
 	case "clickhouse":
 		return &clickhouseConnector{}, nil
+	case "sqlserver":
+		return &sqlserverConnector{}, nil
 	case "excel", "csv":
 		return &fileConnector{}, nil
 	default:
@@ -440,6 +443,117 @@ func (c *clickhouseConnector) GetColumns(ctx context.Context, dbName, tableName 
 		col.Length = length
 		col.Precision = prec
 		col.Scale = scale
+		cols = append(cols, col)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("row iteration failed: %w", err)
+	}
+	return cols, nil
+}
+
+type sqlserverConnector struct {
+	db *sql.DB
+}
+
+func (c *sqlserverConnector) buildDSN(configJSON string) (string, error) {
+	var cfg map[string]interface{}
+	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
+		return "", fmt.Errorf("invalid config json: %w", err)
+	}
+	host, ok := cfg["host"].(string)
+	if !ok || host == "" {
+		return "", fmt.Errorf("missing or invalid required field: host")
+	}
+	portF, ok := cfg["port"].(float64)
+	if !ok || portF <= 0 {
+		return "", fmt.Errorf("missing or invalid required field: port")
+	}
+	username, ok := cfg["username"].(string)
+	if !ok || username == "" {
+		return "", fmt.Errorf("missing or invalid required field: username")
+	}
+	password, _ := cfg["password"].(string)
+	database, ok := cfg["database"].(string)
+	if !ok || database == "" {
+		return "", fmt.Errorf("missing or invalid required field: database")
+	}
+	port := int(portF)
+	return fmt.Sprintf("sqlserver://%s:%s@%s:%d?database=%s",
+		username, password, host, port, database), nil
+}
+
+func (c *sqlserverConnector) Connect(configJSON string) error {
+	if c.db != nil {
+		return nil
+	}
+	dsn, err := c.buildDSN(configJSON)
+	if err != nil {
+		return err
+	}
+	db, err := sql.Open("sqlserver", dsn)
+	if err != nil {
+		return fmt.Errorf("open sqlserver failed: %w", err)
+	}
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return fmt.Errorf("ping sqlserver failed: %w", err)
+	}
+	c.db = db
+	return nil
+}
+
+func (c *sqlserverConnector) Close() error {
+	if c.db == nil {
+		return nil
+	}
+	err := c.db.Close()
+	c.db = nil
+	return err
+}
+
+func (c *sqlserverConnector) Query(ctx context.Context, query string, args ...interface{}) ([]map[string]interface{}, error) {
+	if c.db == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+	rows, err := c.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query failed: %w", err)
+	}
+	defer rows.Close()
+	return scanRows(rows)
+}
+
+func (c *sqlserverConnector) GetColumns(ctx context.Context, dbName, tableName string) ([]ColumnInfo, error) {
+	if c.db == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+	query := `
+		SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE
+		FROM INFORMATION_SCHEMA.COLUMNS
+		WHERE TABLE_CATALOG = ? AND TABLE_NAME = ?
+		ORDER BY ORDINAL_POSITION`
+	rows, err := c.db.QueryContext(ctx, query, dbName, tableName)
+	if err != nil {
+		return nil, fmt.Errorf("get columns failed: %w", err)
+	}
+	defer rows.Close()
+
+	var cols []ColumnInfo
+	for rows.Next() {
+		var col ColumnInfo
+		var maxLen, prec, scale sql.NullInt64
+		if err := rows.Scan(&col.Name, &col.Type, &maxLen, &prec, &scale); err != nil {
+			return nil, fmt.Errorf("scan column info failed: %w", err)
+		}
+		if maxLen.Valid {
+			col.Length = int(maxLen.Int64)
+		}
+		if prec.Valid {
+			col.Precision = int(prec.Int64)
+		}
+		if scale.Valid {
+			col.Scale = int(scale.Int64)
+		}
 		cols = append(cols, col)
 	}
 	if err := rows.Err(); err != nil {

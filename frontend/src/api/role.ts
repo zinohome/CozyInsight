@@ -10,4 +10,5 @@ export const roleAPI = {
   listMenus: () => request.get<Menu[]>('/role/menus'),
   setRoleMenus: (roleId: number, menuIds: number[]) => request.post(`/role/${roleId}/menus`, { menuIds }),
   getRoleMenus: (roleId: number) => request.get<number[]>(`/role/${roleId}/menus`),
+  setUserRoles: (userId: number, roleIds: number[]) => request.post(`/user/${userId}/roles`, { roleIds }),
 }

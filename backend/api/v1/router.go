@@ -1,6 +1,9 @@
 package v1
 
 import (
+	"context"
+	"fmt"
+
 	"github.com/gin-gonic/gin"
 	"github.com/jmoiron/sqlx"
 
@@ -9,11 +12,12 @@ import (
 	"cozy-insight/internal/middleware"
 	"cozy-insight/internal/repository"
 	"cozy-insight/internal/service"
+	"cozy-insight/pkg/cache"
 	"cozy-insight/pkg/config"
 	"cozy-insight/pkg/jwt"
 )
 
-func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
+func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine, redisClient *cache.RedisClient) {
 	jwtManager := jwt.NewManager(cfg.JWT.Secret, cfg.JWT.ExpireHours)
 	userRepo := repository.NewUserRepository(db)
 	authService := service.NewAuthService(userRepo, jwtManager)
@@ -32,7 +36,15 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 	rowPermHandler := handler.NewRowPermissionHandler(rowPermService)
 
 	chartRepo := repository.NewChartRepository(db)
-	chartService := service.NewChartService(chartRepo, datasetRepo, dsRepo, nil, connectorPool)
+	var cacheService *service.CacheService
+	if redisClient != nil {
+		cacheService = service.NewCacheService(redisClient)
+		if err := redisClient.Ping(context.Background()); err != nil {
+			fmt.Printf("redis connection failed: %v\n", err)
+			cacheService = nil
+		}
+	}
+	chartService := service.NewChartService(chartRepo, datasetRepo, dsRepo, cacheService, connectorPool)
 	chartHandler := handler.NewChartHandler(chartService)
 	exportHandler := handler.NewExportHandler(chartService)
 
@@ -47,6 +59,10 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 	workbenchRepo := repository.NewWorkbenchRepository(db)
 	workbenchService := service.NewWorkbenchService(workbenchRepo)
 	workbenchHandler := handler.NewWorkbenchHandler(workbenchService)
+
+	messageRepo := repository.NewMessageRepository(db)
+	messageService := service.NewMessageService(messageRepo)
+	messageHandler := handler.NewMessageHandler(messageService)
 
 	api := r.Group("/api/v1")
 	{
@@ -83,6 +99,7 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 			authd.DELETE("/chart/:id", chartHandler.Delete)
 			authd.POST("/chart/:id/data", chartHandler.GetData)
 			authd.GET("/chart/:id/export/csv", exportHandler.ExportCSV)
+			authd.GET("/chart/:id/export/excel", exportHandler.ExportExcel)
 
 			authd.GET("/dashboard", dashboardHandler.List)
 			authd.POST("/dashboard", dashboardHandler.Create)
@@ -94,6 +111,7 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 			authd.DELETE("/dashboard/:id/charts/:chartId", dashboardHandler.RemoveChart)
 				authd.POST("/dashboard/:id/share", dashboardHandler.EnableShare)
 				authd.DELETE("/dashboard/:id/share", dashboardHandler.DisableShare)
+				authd.GET("/share-links", shareHandler.List)
 
 				authd.GET("/workbench/stats", workbenchHandler.GetStats)
 				authd.GET("/workbench/recent", workbenchHandler.GetRecentViews)
@@ -101,6 +119,12 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 				authd.GET("/workbench/favorites", workbenchHandler.GetFavorites)
 				authd.POST("/workbench/favorites", workbenchHandler.AddFavorite)
 				authd.DELETE("/workbench/favorites/:type/:id", workbenchHandler.DeleteFavorite)
+
+				authd.GET("/messages", messageHandler.List)
+				authd.GET("/messages/unread-count", messageHandler.CountUnread)
+				authd.POST("/messages/:id/read", messageHandler.MarkAsRead)
+				authd.POST("/messages/read-all", messageHandler.MarkAllAsRead)
+				authd.DELETE("/messages/:id", messageHandler.Delete)
 
 			userRepo := repository.NewUserRepository(db)
 			userService := service.NewUserService(userRepo)

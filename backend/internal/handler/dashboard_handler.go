@@ -108,8 +108,13 @@ func (h *DashboardHandler) EnableShare(c *gin.Context) {
 	if !ok {
 		return
 	}
+	var req struct {
+		Password    string `json:"password"`
+		ExpireHours int    `json:"expireHours"`
+	}
+	_ = c.ShouldBindJSON(&req)
 	userID := middleware.GetUserID(c)
-	token, err := h.service.EnableShare(c.Request.Context(), id, userID)
+	token, err := h.service.EnableShare(c.Request.Context(), id, userID, req.Password, req.ExpireHours)
 	if err != nil {
 		if errors.Is(err, service.ErrNotOwner) {
 			c.JSON(http.StatusForbidden, gin.H{"code": 403, "error": err.Error()})
