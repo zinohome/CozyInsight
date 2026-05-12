@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Button, message } from 'antd'
 import { dashboardAPI } from '@/api/dashboard'
+import { workbenchAPI } from '@/api/workbench'
 import ChartRenderer from '@/components/ChartRenderer'
 import { useScreenData } from '@/hooks/useScreenData'
 
@@ -24,6 +25,12 @@ export default function ScreenView() {
     document.addEventListener('fullscreenchange', handleFullscreenChange)
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
   }, [])
+
+  useEffect(() => {
+    if (isValidId) {
+      workbenchAPI.recordVisit({ resourceType: 'screen', resourceId: numericId }).catch(() => {})
+    }
+  }, [numericId, isValidId])
 
   const toggleFullscreen = () => {
     const el = containerRef.current

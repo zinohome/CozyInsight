@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Button, message, Space } from 'antd'
 import { dashboardAPI } from '@/api/dashboard'
 import { chartAPI } from '@/api/chart'
+import { workbenchAPI } from '@/api/workbench'
 import ChartRenderer from '@/components/ChartRenderer'
 import DrillBreadcrumb from '@/components/DrillBreadcrumb'
 import { useChartLinkage } from '@/hooks/useChartLinkage'
@@ -86,6 +87,11 @@ export default function DashboardView() {
         return
       }
       setDashboard(d)
+      try {
+        await workbenchAPI.recordVisit({ resourceType: 'dashboard', resourceId: numericId })
+      } catch {
+        // ignore
+      }
       const allCharts = await chartAPI.list()
       setCharts(allCharts)
 

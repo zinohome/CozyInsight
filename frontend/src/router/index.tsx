@@ -1,5 +1,6 @@
 import { Routes, Route, useLocation } from 'react-router-dom'
 import LoginPage from '@/pages/login'
+import WorkbenchPage from '@/pages/workbench'
 import ShareView from '@/pages/share/ShareView'
 import ScreenView from '@/pages/screen/ScreenView'
 import DatasourcePage from '@/pages/datasource'
@@ -19,7 +20,7 @@ function LayoutRoutes() {
   return (
     <Layout>
       <Routes>
-        <Route path="/" element={<div style={{ padding: 24 }}>工作台（建设中）</div>} />
+        <Route path="/" element={<WorkbenchPage />} />
         <Route path="/datasource" element={<DatasourcePage />} />
         <Route path="/dataset" element={<DatasetPage />} />
         <Route path="/chart" element={<ChartPage />} />

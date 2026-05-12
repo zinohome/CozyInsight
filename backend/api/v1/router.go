@@ -44,6 +44,10 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 	shareLinkService := service.NewShareLinkService(shareLinkRepo, dashboardRepo)
 	shareHandler := handler.NewShareHandler(shareLinkService)
 
+	workbenchRepo := repository.NewWorkbenchRepository(db)
+	workbenchService := service.NewWorkbenchService(workbenchRepo)
+	workbenchHandler := handler.NewWorkbenchHandler(workbenchService)
+
 	api := r.Group("/api/v1")
 	{
 		api.POST("/auth/register", authHandler.Register)
@@ -90,6 +94,13 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine) {
 			authd.DELETE("/dashboard/:id/charts/:chartId", dashboardHandler.RemoveChart)
 				authd.POST("/dashboard/:id/share", dashboardHandler.EnableShare)
 				authd.DELETE("/dashboard/:id/share", dashboardHandler.DisableShare)
+
+				authd.GET("/workbench/stats", workbenchHandler.GetStats)
+				authd.GET("/workbench/recent", workbenchHandler.GetRecentViews)
+				authd.POST("/workbench/recent", workbenchHandler.RecordVisit)
+				authd.GET("/workbench/favorites", workbenchHandler.GetFavorites)
+				authd.POST("/workbench/favorites", workbenchHandler.AddFavorite)
+				authd.DELETE("/workbench/favorites/:type/:id", workbenchHandler.DeleteFavorite)
 
 			userRepo := repository.NewUserRepository(db)
 			userService := service.NewUserService(userRepo)
