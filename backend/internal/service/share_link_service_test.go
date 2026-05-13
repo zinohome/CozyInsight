@@ -25,7 +25,7 @@ func TestShareLinkService_Create(t *testing.T) {
 	mock.ExpectExec("INSERT INTO share_links").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	link, err := svc.Create(context.Background(), "dashboard", 1, 1)
+	link, err := svc.Create(context.Background(), "dashboard", 1, 1, "", 0)
 	require.NoError(t, err)
 	assert.NotEmpty(t, link.Token)
 	assert.Equal(t, "dashboard", link.ResourceType)
@@ -57,7 +57,7 @@ func TestShareLinkService_GetDashboard(t *testing.T) {
 			1, "Sales Dashboard", "{}", 1, 1, now, now, nil,
 		))
 
-	dashboard, err := svc.GetDashboard(context.Background(), "abc123")
+	dashboard, err := svc.GetDashboard(context.Background(), "abc123", "")
 	require.NoError(t, err)
 	assert.Equal(t, "Sales Dashboard", dashboard.Title)
 	assert.NoError(t, mock.ExpectationsWereMet())
@@ -81,7 +81,7 @@ func TestShareLinkService_GetDashboard_Expired(t *testing.T) {
 			1, "expired", "dashboard", 1, 1, &past, 1, now,
 		))
 
-	_, err = svc.GetDashboard(context.Background(), "expired")
+	_, err = svc.GetDashboard(context.Background(), "expired", "")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "expired")
 	assert.NoError(t, mock.ExpectationsWereMet())

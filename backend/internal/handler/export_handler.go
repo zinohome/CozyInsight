@@ -107,7 +107,7 @@ func (h *ExportHandler) ExportExcel(c *gin.Context) {
 
 	// Auto-filter
 	lastCol, _ := excelize.CoordinatesToCellName(len(headers), 1)
-	f.AutoFilter(sheetName, "A1", lastCol, [])
+	f.AutoFilter(sheetName, "A1:"+lastCol, []excelize.AutoFilterOptions{})
 
 	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=chart-%d.xlsx", id))

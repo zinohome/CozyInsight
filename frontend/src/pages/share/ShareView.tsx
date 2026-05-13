@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
-import { Input, Button, message } from 'antd'
+import { Input, Button } from 'antd'
 import { LockOutlined } from '@ant-design/icons'
 import { shareAPI } from '@/api/share'
 import { chartAPI } from '@/api/chart'
@@ -14,7 +14,6 @@ export default function ShareView() {
   const [dashboard, setDashboard] = useState<Dashboard | null>(null)
   const [password, setPassword] = useState('')
   const [needPassword, setNeedPassword] = useState(false)
-  const [error, setError] = useState('')
 
   const getDashboard = useCallback(async () => {
     const res = await shareAPI.get(token!, password || undefined)
@@ -60,7 +59,7 @@ export default function ShareView() {
   }
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>加载中...</div>
-  if (error || screenError) return <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>{error || screenError}</div>
+  if (screenError) return <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>{screenError}</div>
   if (!dashboard) return null
 
   if (dashboard.type === 'screen') {

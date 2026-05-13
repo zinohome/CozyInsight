@@ -1,6 +1,5 @@
-import { useState } from 'react'
 import { Button, Select, Input, Space, Tag } from 'antd'
-import { PlusOutlined, CloseOutlined } from '@ant-design/icons'
+import { PlusOutlined } from '@ant-design/icons'
 
 export interface DashboardFilter {
   id: string

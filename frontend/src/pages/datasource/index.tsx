@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Table, Button, Space, Tag, Modal, Form, Input, Select, message, Upload, Tabs } from 'antd'
 import { UploadOutlined, EditOutlined, ApiOutlined } from '@ant-design/icons'
 import { datasourceAPI } from '@/api/datasource'
-import type { Datasource, CreateDatasourceRequest, TestConnectionRequest } from '@/types/datasource'
+import type { Datasource } from '@/types/datasource'
 
 export default function DatasourcePage() {
   const [list, setList] = useState<Datasource[]>([])

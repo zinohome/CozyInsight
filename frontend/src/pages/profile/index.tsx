@@ -4,14 +4,14 @@ import { Card, Form, Input, Button, message, Avatar, Divider, Descriptions } fro
 import { UserOutlined, LockOutlined, ArrowLeftOutlined } from '@ant-design/icons'
 import { userAPI } from '@/api/user'
 import { useAuthStore } from '@/store/auth'
-import type { User } from '@/types/user'
+import type { UserInfo } from '@/types/auth'
 
 export default function ProfilePage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const [form] = Form.useForm()
   const [pwdForm] = Form.useForm()
-  const [userInfo, setUserInfo] = useState<User | null>(null)
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
   const [loading, setLoading] = useState(false)
   const [pwdLoading, setPwdLoading] = useState(false)
 

@@ -4,6 +4,7 @@ export interface Dataset {
   datasourceId: number
   databaseName: string
   tableName: string
+  sql?: string
   type: string
   mode: number
   status: number

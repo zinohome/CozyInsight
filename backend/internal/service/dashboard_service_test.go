@@ -269,7 +269,7 @@ func TestDashboardService_EnableShare(t *testing.T) {
 	mock.ExpectExec("INSERT INTO share_links").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	token, err := svc.EnableShare(context.Background(), 1, 1)
+	token, err := svc.EnableShare(context.Background(), 1, 1, "", 0)
 	require.NoError(t, err)
 	assert.NotEmpty(t, token)
 	assert.NoError(t, mock.ExpectationsWereMet())

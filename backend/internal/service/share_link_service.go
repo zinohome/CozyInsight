@@ -51,7 +51,7 @@ func (s *ShareLinkService) GetDashboard(ctx context.Context, token string, passw
 	if link.Password != "" && link.Password != password {
 		return nil, fmt.Errorf("invalid password")
 	}
-	if link.ResourceType != "dashboard" {
+	if link.ResourceType != "dashboard" && link.ResourceType != "screen" {
 		return nil, fmt.Errorf("invalid resource type")
 	}
 	dashboard, err := s.dashboardRepo.FindByID(ctx, link.ResourceID)
@@ -63,24 +63,6 @@ func (s *ShareLinkService) GetDashboard(ctx context.Context, token string, passw
 
 func (s *ShareLinkService) ListByUser(ctx context.Context, userID uint64) ([]model.ShareLink, error) {
 	return s.repo.ListByUser(ctx, userID)
-}
-
-func (s *ShareLinkService) GetDashboard(ctx context.Context, token string) (*model.Dashboard, error) {
-	link, err := s.repo.FindByToken(ctx, token)
-	if err != nil {
-		return nil, fmt.Errorf("share link not found: %w", err)
-	}
-	if link.ExpireAt != nil && link.ExpireAt.Before(time.Now()) {
-		return nil, fmt.Errorf("share link expired")
-	}
-	if link.ResourceType != "dashboard" && link.ResourceType != "screen" {
-		return nil, fmt.Errorf("invalid resource type")
-	}
-	dashboard, err := s.dashboardRepo.FindByID(ctx, link.ResourceID)
-	if err != nil {
-		return nil, fmt.Errorf("dashboard not found: %w", err)
-	}
-	return dashboard, nil
 }
 
 func (s *ShareLinkService) Revoke(ctx context.Context, token string, userID uint64) error {

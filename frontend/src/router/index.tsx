@@ -37,7 +37,7 @@ function LayoutRoutes() {
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Layout>
-  )}
+  )
 }
 
 export default function AppRoutes() {

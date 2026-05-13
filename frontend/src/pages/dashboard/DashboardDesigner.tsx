@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Button, message, Modal, Select, Space, Input, InputNumber, Table, Tag, CopyOutlined } from 'antd'
+import { Button, message, Modal, Select, Space, Input, InputNumber, Table, Tag } from 'antd'
+import { CopyOutlined } from '@ant-design/icons'
 import { Responsive, WidthProvider } from 'react-grid-layout'
 import { dashboardAPI } from '@/api/dashboard'
 import { chartAPI } from '@/api/chart'

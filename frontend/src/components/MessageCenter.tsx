@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Badge, Dropdown, List, Button, Empty, Tabs } from 'antd'
+import { Badge, Dropdown, List, Button, Empty } from 'antd'
 import { BellOutlined, CheckOutlined, DeleteOutlined } from '@ant-design/icons'
 import { messageAPI } from '@/api/message'
 import type { Message } from '@/types/message'

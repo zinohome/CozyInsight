@@ -25,16 +25,14 @@ export default function AppBreadcrumb() {
 
   // Build breadcrumb items from path segments
   const parts = path.split('/').filter(Boolean)
-  const items = [
+  const items: Array<{ title: string; onClick?: () => void }> = [
     { title: '工作台', onClick: () => navigate('/') },
   ]
 
   let currentPath = ''
   for (const part of parts) {
     currentPath += `/${part}`
-    // Check for exact match first, then prefix match
     const name = routeNames[currentPath] || routeNames[`${currentPath.split('/').slice(0, -1).join('/')}/${part}`] || part
-    // Don't navigate for dynamic segments (e.g., IDs)
     const isDynamic = !isNaN(Number(part))
     if (!isDynamic) {
       items.push({ title: name, onClick: () => navigate(currentPath) })
