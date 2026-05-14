@@ -25,6 +25,19 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    setupFiles: ['./src/test-setup.ts'],
+    coverage: {
+      provider: 'v8',
+      exclude: [
+        'node_modules/',
+        'src/test-setup.ts',
+        'src/**/*.test.ts',
+        'src/**/*.test.tsx',
+        'src/**/*.d.ts',
+        'src/pages/**/*.tsx',
+        'src/components/Layout/index.tsx',
+      ],
+    },
     deps: {
       optimizer: {
         web: {
