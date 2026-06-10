@@ -283,3 +283,45 @@ func TestEngineErrors_NonNil(t *testing.T) {
 	assert.True(t, errors.Is(err, err) || err != nil)
 	assert.NotNil(t, err)
 }
+
+// ---------------- doris/starrocks/mongodb 复用 MySQL 协议 ----------------
+//
+// 这三个数据源类型 NewConnector 都返回 *mysqlConnector，因为：
+//   - Doris / StarRocks 自带 MySQL wire protocol 兼容层
+//   - MongoDB-BI（mongosqld）暴露 MySQL 协议给 BI 工具
+//
+// 此测试验证 DSN 拼接出来的格式正确，能被 MySQL driver 接受。
+
+func TestDorisStarRocksMongoDB_DSNFormat(t *testing.T) {
+	cfgJSON := `{"host":"127.0.0.1","port":3306,"username":"root","password":"p","database":"db"}`
+	wantDSN := "root:p@tcp(127.0.0.1:3306)/db?charset=utf8mb4&parseTime=true"
+
+	for _, dsType := range []string{"doris", "starrocks", "mongodb"} {
+		t.Run(dsType, func(t *testing.T) {
+			conn, err := NewConnector(dsType)
+			assert.NoError(t, err, "factory returns connector")
+
+			// 强制类型断言为 *mysqlConnector 并访问包私有方法 buildDSN
+			mc, ok := conn.(*mysqlConnector)
+			assert.True(t, ok, "dsType=%s should return *mysqlConnector", dsType)
+
+			dsn, err := mc.buildDSN(cfgJSON)
+			assert.NoError(t, err, "buildDSN")
+			assert.Equal(t, wantDSN, dsn, "dsType=%s DSN", dsType)
+		})
+	}
+}
+
+func TestDorisStarRocksMongoDB_Connect_MissingFields(t *testing.T) {
+	// 三个复用 MySQL 协议的 connector 在配置错误时返回和 MySQL 一致的错误。
+	for _, dsType := range []string{"doris", "starrocks", "mongodb"} {
+		t.Run(dsType, func(t *testing.T) {
+			conn, err := NewConnector(dsType)
+			assert.NoError(t, err)
+
+			err = conn.Connect(`{"host":"x","port":3306,"username":"u","password":"p"}`) // 缺 database
+			assert.Error(t, err, "missing database should fail")
+			assert.Contains(t, err.Error(), "database")
+		})
+	}
+}

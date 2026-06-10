@@ -33,6 +33,14 @@ type ColumnInfo struct {
 }
 
 // NewConnector returns a connector for the given datasource type.
+//
+// 注意：doris / starrocks / mongodb 在此返回的是 *mysqlConnector，不是别名错误：
+//   - Apache Doris 兼容 MySQL wire protocol（用户通过 mysql client 连）
+//   - StarRocks 兼容 MySQL wire protocol
+//   - MongoDB-BI（mongosqld）暴露 MySQL 协议接口给 BI 工具
+//
+// 因此这三类数据源复用 MySQL 驱动；DSN 格式、协议、driver 全部相同。
+// 如未来出现专用协议差异，再各自加新 connector 类型。
 func NewConnector(dsType string) (DatasourceConnector, error) {
 	switch dsType {
 	case "mysql":
@@ -49,6 +57,7 @@ func NewConnector(dsType string) (DatasourceConnector, error) {
 		return &fileConnector{}, nil
 	case "oracle":
 		return &oracleConnector{}, nil
+	// 复用 MySQL 驱动：见上方注释（MySQL wire protocol 兼容）
 	case "doris":
 		return &mysqlConnector{}, nil
 	case "starrocks":

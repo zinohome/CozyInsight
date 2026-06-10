@@ -90,9 +90,9 @@ func (t *SSHTunnel) forward(localConn net.Conn) {
 	_, _ = io.Copy(localConn, remoteConn)
 }
 
-// LocalAddr 返回客户端应使用的地址。
+// LocalAddr 返回客户端应使用的地址。如果 localPort=0，会用 listener 实际分配的端口。
 func (t *SSHTunnel) LocalAddr() string {
-	return fmt.Sprintf("127.0.0.1:%d", t.localPort)
+	return fmt.Sprintf("127.0.0.1:%d", t.LocalPort())
 }
 
 // LocalPort 返回实际监听的本地端口（如果 localPort=0 时由系统分配）。
