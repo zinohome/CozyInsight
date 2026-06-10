@@ -158,6 +158,13 @@ export default function DatasourcePage() {
                   { value: 'sqlserver', label: 'SQL Server' },
                   { value: 'sqlite', label: 'SQLite' },
                   { value: 'clickhouse', label: 'ClickHouse' },
+                  { value: 'oracle', label: 'Oracle' },
+                  { value: 'elasticsearch', label: 'Elasticsearch' },
+                  { value: 'doris', label: 'Doris' },
+                  { value: 'starrocks', label: 'StarRocks' },
+                  { value: 'mongodb', label: 'MongoDB (BI)' },
+                  { value: 'hive', label: 'Hive' },
+                  { value: 'api', label: 'API' },
                 ]} />
               </Form.Item>
               <Form.Item name="config" label="配置 (JSON)" rules={[{ required: true }]}>
@@ -213,6 +220,13 @@ export default function DatasourcePage() {
               { value: 'sqlserver', label: 'SQL Server' },
               { value: 'sqlite', label: 'SQLite' },
               { value: 'clickhouse', label: 'ClickHouse' },
+              { value: 'oracle', label: 'Oracle' },
+              { value: 'elasticsearch', label: 'Elasticsearch' },
+              { value: 'doris', label: 'Doris' },
+              { value: 'starrocks', label: 'StarRocks' },
+              { value: 'mongodb', label: 'MongoDB (BI)' },
+              { value: 'hive', label: 'Hive' },
+              { value: 'api', label: 'API' },
             ]} />
           </Form.Item>
           <Form.Item name="config" label="配置 (JSON)" rules={[{ required: true }]}>
