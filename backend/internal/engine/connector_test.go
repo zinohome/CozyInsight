@@ -1,6 +1,9 @@
 package engine
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -44,7 +47,7 @@ func TestNewConnector_Unsupported(t *testing.T) {
 }
 
 func TestNewConnector_AllTypes(t *testing.T) {
-	types := []string{"mysql", "postgresql", "sqlite", "clickhouse", "sqlserver", "excel", "csv", "oracle", "doris", "starrocks", "mongodb", "hive", "elasticsearch"}
+	types := []string{"mysql", "postgresql", "sqlite", "clickhouse", "sqlserver", "excel", "csv", "oracle", "doris", "starrocks", "mongodb", "hive", "elasticsearch", "api"}
 	for _, ty := range types {
 		t.Run(ty, func(t *testing.T) {
 			conn, err := NewConnector(ty)
@@ -52,6 +55,88 @@ func TestNewConnector_AllTypes(t *testing.T) {
 			assert.NotNil(t, conn)
 		})
 	}
+}
+
+func TestAPIConnector_Connect(t *testing.T) {
+	conn := &apiConnector{}
+	// 缺少 url
+	err := conn.Connect(`{"method":"GET"}`)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "url")
+
+	// 完整配置
+	err = conn.Connect(`{"url":"https://api.example.com/data","method":"POST","timeout":10,"jsonPath":"data.items"}`)
+	require.NoError(t, err)
+	assert.Equal(t, "https://api.example.com/data", conn.baseURL)
+	assert.Equal(t, "POST", conn.method)
+	assert.Equal(t, 10, conn.timeoutSec)
+	assert.Equal(t, "data.items", conn.jsonPath)
+}
+
+func TestAPIConnector_Connect_DefaultMethod(t *testing.T) {
+	conn := &apiConnector{}
+	err := conn.Connect(`{"url":"https://x.example.com"}`)
+	require.NoError(t, err)
+	assert.Equal(t, "GET", conn.method)
+	assert.Equal(t, 30, conn.timeoutSec)
+}
+
+func TestAPIConnector_Connect_InvalidJSON(t *testing.T) {
+	conn := &apiConnector{}
+	err := conn.Connect(`not-a-json`)
+	assert.Error(t, err)
+}
+
+func TestAPIConnector_Query(t *testing.T) {
+	// 启动一个 httptest server 返回数组
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`[{"id":1,"name":"a"},{"id":2,"name":"b"}]`))
+	}))
+	defer server.Close()
+
+	conn := &apiConnector{}
+	err := conn.Connect(`{"url":"` + server.URL + `","method":"GET"}`)
+	require.NoError(t, err)
+
+	rows, err := conn.Query(context.Background(), "")
+	require.NoError(t, err)
+	assert.Len(t, rows, 2)
+	assert.Equal(t, "a", rows[0]["name"])
+}
+
+func TestAPIConnector_Query_JSONPath(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"meta":{"total":2},"data":{"items":[{"id":1}]}}`))
+	}))
+	defer server.Close()
+
+	conn := &apiConnector{}
+	err := conn.Connect(`{"url":"` + server.URL + `","jsonPath":"data.items"}`)
+	require.NoError(t, err)
+
+	rows, err := conn.Query(context.Background(), "")
+	require.NoError(t, err)
+	assert.Len(t, rows, 1)
+	assert.Equal(t, float64(1), rows[0]["id"])
+}
+
+func TestAPIConnector_Query_HTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("internal error"))
+	}))
+	defer server.Close()
+
+	conn := &apiConnector{}
+	err := conn.Connect(`{"url":"` + server.URL + `"}`)
+	require.NoError(t, err)
+
+	_, err = conn.Query(context.Background(), "")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "500")
 }
 
 func TestOracleConnector_BuildDSN(t *testing.T) {
