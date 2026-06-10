@@ -320,6 +320,27 @@ export default function ChartRenderer({ type, data, config, height = 300, onEven
         />
       )
     }
+    case 'kpi': {
+      const value = Number(data[0]?.[yField]) || 0
+      const title = config.dimensions[0] || '指标'
+      return (
+        <div
+          style={{
+            height,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+          }}
+        >
+          <div style={{ fontSize: 14, color: '#666' }}>{title}</div>
+          <div style={{ fontSize: 36, fontWeight: 600, color: '#333' }}>
+            {value.toLocaleString()}
+          </div>
+        </div>
+      )
+    }
     case 'waterfall': {
       // 瀑布图需要数据预处理：累加值
       const processed = data.map((item, index) => {

@@ -168,6 +168,13 @@ describe('ChartRenderer', () => {
     expect(screen.getByTestId('gauge-chart')).toBeInTheDocument()
   })
 
+  it('should render kpi card', () => {
+    const kpiData = [{ sales: 12345 }]
+    render(<ChartRenderer type="kpi" data={kpiData} config={{ dimensions: ['total'], metrics: ['sales'] }} />)
+    expect(screen.getByText('total')).toBeInTheDocument()
+    expect(screen.getByText(kpiData[0].sales.toLocaleString())).toBeInTheDocument()
+  })
+
   it('should render table chart', () => {
     const { container } = render(<ChartRenderer type="table" data={baseData} config={baseConfig} />)
     expect(container.querySelector('table')).toBeInTheDocument()
