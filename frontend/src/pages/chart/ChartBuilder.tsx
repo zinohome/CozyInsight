@@ -168,19 +168,32 @@ export default function ChartBuilder() {
             <div>
               <span style={{ marginRight: 8 }}>图表类型:</span>
               <Radio.Group value={chartType} onChange={e => setChartType(e.target.value)}>
+                <Radio.Button value="table">表格</Radio.Button>
+                <Radio.Button value="pivot-table">透视表</Radio.Button>
+                <Radio.Button value="kpi">指标卡</Radio.Button>
                 <Radio.Button value="bar">柱状图</Radio.Button>
+                <Radio.Button value="stacked-bar">堆叠柱状图</Radio.Button>
+                <Radio.Button value="horizontal-bar">横向柱状图</Radio.Button>
+                <Radio.Button value="grouped-bar">分组柱状图</Radio.Button>
+                <Radio.Button value="percent-bar">百分比柱状图</Radio.Button>
+                <Radio.Button value="waterfall">瀑布图</Radio.Button>
                 <Radio.Button value="line">折线图</Radio.Button>
+                <Radio.Button value="stacked-line">堆叠折线图</Radio.Button>
                 <Radio.Button value="area">面积图</Radio.Button>
+                <Radio.Button value="stacked-area">堆叠面积图</Radio.Button>
                 <Radio.Button value="pie">饼图</Radio.Button>
+                <Radio.Button value="donut">环形图</Radio.Button>
+                <Radio.Button value="rose">玫瑰图</Radio.Button>
                 <Radio.Button value="scatter">散点图</Radio.Button>
+                <Radio.Button value="bubble">气泡图</Radio.Button>
                 <Radio.Button value="radar">雷达图</Radio.Button>
                 <Radio.Button value="funnel">漏斗图</Radio.Button>
+                <Radio.Button value="gauge">仪表盘</Radio.Button>
                 <Radio.Button value="wordcloud">词云</Radio.Button>
-                <Radio.Button value="sankey">桑基图</Radio.Button>
                 <Radio.Button value="heatmap">热力图</Radio.Button>
                 <Radio.Button value="treemap">矩形树图</Radio.Button>
-                <Radio.Button value="gauge">仪表盘</Radio.Button>
-                <Radio.Button value="table">表格</Radio.Button>
+                <Radio.Button value="sankey">桑基图</Radio.Button>
+                <Radio.Button value="combo">组合图</Radio.Button>
               </Radio.Group>
             </div>
             <div>
