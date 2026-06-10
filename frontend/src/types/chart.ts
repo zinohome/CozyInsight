@@ -1,3 +1,32 @@
+export type ChartType =
+  | 'bar'
+  | 'stacked-bar'
+  | 'horizontal-bar'
+  | 'horizontal-stacked-bar'
+  | 'grouped-bar'
+  | 'percent-bar'
+  | 'waterfall'
+  | 'line'
+  | 'stacked-line'
+  | 'area'
+  | 'stacked-area'
+  | 'pie'
+  | 'donut'
+  | 'rose'
+  | 'scatter'
+  | 'bubble'
+  | 'radar'
+  | 'funnel'
+  | 'gauge'
+  | 'wordcloud'
+  | 'heatmap'
+  | 'treemap'
+  | 'sankey'
+  | 'combo'
+  | 'kpi'
+  | 'pivot-table'
+  | 'table'
+
 export interface Chart {
   id: number
   title: string
