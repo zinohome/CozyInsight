@@ -81,6 +81,11 @@ describe('ChartRenderer', () => {
     expect(screen.getByTestId('line-chart')).toBeInTheDocument()
   })
 
+  it('should render stacked line chart', () => {
+    render(<ChartRenderer type="stacked-line" data={baseData} config={{ dimensions: ['month', 'category'], metrics: ['sales'] }} />)
+    expect(screen.getByTestId('line-chart')).toBeInTheDocument()
+  })
+
   it('should render pie chart', () => {
     render(<ChartRenderer type="pie" data={baseData} config={baseConfig} />)
     expect(screen.getByTestId('pie-chart')).toBeInTheDocument()
@@ -88,6 +93,11 @@ describe('ChartRenderer', () => {
 
   it('should render area chart', () => {
     render(<ChartRenderer type="area" data={baseData} config={baseConfig} />)
+    expect(screen.getByTestId('area-chart')).toBeInTheDocument()
+  })
+
+  it('should render stacked area chart', () => {
+    render(<ChartRenderer type="stacked-area" data={baseData} config={{ dimensions: ['month', 'category'], metrics: ['sales'] }} />)
     expect(screen.getByTestId('area-chart')).toBeInTheDocument()
   })
 

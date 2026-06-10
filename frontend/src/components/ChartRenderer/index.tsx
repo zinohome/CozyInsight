@@ -126,6 +126,20 @@ export default function ChartRenderer({ type, data, config, height = 300, onEven
           onEvent={handleEvent}
         />
       )
+    case 'stacked-line': {
+      const seriesField = dimensions[1] || dimensions[0]
+      return (
+        <Line
+          data={data}
+          xField={xField}
+          yField={yField}
+          seriesField={seriesField}
+          height={height}
+          autoFit
+          onEvent={handleEvent}
+        />
+      )
+    }
     case 'pie': {
       const colorField = dimensions[0]
       const angleField = metrics[0]
@@ -151,6 +165,21 @@ export default function ChartRenderer({ type, data, config, height = 300, onEven
           onEvent={handleEvent}
         />
       )
+    case 'stacked-area': {
+      const seriesField = dimensions[1] || dimensions[0]
+      return (
+        <Area
+          data={data}
+          xField={xField}
+          yField={yField}
+          seriesField={seriesField}
+          isStack
+          height={height}
+          autoFit
+          onEvent={handleEvent}
+        />
+      )
+    }
     case 'scatter':
       return (
         <Scatter
