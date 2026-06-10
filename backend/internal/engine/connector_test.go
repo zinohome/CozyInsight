@@ -44,7 +44,7 @@ func TestNewConnector_Unsupported(t *testing.T) {
 }
 
 func TestNewConnector_AllTypes(t *testing.T) {
-	types := []string{"mysql", "postgresql", "sqlite", "clickhouse", "sqlserver", "excel", "csv", "oracle", "doris", "starrocks", "mongodb", "hive"}
+	types := []string{"mysql", "postgresql", "sqlite", "clickhouse", "sqlserver", "excel", "csv", "oracle", "doris", "starrocks", "mongodb", "hive", "elasticsearch"}
 	for _, ty := range types {
 		t.Run(ty, func(t *testing.T) {
 			conn, err := NewConnector(ty)

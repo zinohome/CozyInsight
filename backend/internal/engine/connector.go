@@ -57,6 +57,8 @@ func NewConnector(dsType string) (DatasourceConnector, error) {
 		return &mysqlConnector{}, nil
 	case "hive":
 		return &hiveConnector{}, nil
+	case "elasticsearch":
+		return &elasticsearchConnector{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported datasource type: %s", dsType)
 	}
