@@ -91,6 +91,16 @@ describe('ChartRenderer', () => {
     expect(screen.getByTestId('pie-chart')).toBeInTheDocument()
   })
 
+  it('should render donut chart', () => {
+    render(<ChartRenderer type="donut" data={baseData} config={baseConfig} />)
+    expect(screen.getByTestId('pie-chart')).toBeInTheDocument()
+  })
+
+  it('should render rose chart', () => {
+    render(<ChartRenderer type="rose" data={baseData} config={baseConfig} />)
+    expect(screen.getByTestId('pie-chart')).toBeInTheDocument()
+  })
+
   it('should render area chart', () => {
     render(<ChartRenderer type="area" data={baseData} config={baseConfig} />)
     expect(screen.getByTestId('area-chart')).toBeInTheDocument()

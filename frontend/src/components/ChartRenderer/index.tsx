@@ -154,6 +154,39 @@ export default function ChartRenderer({ type, data, config, height = 300, onEven
         />
       )
     }
+    case 'donut': {
+      const colorField = dimensions[0]
+      const angleField = metrics[0]
+      return (
+        <Pie
+          data={data}
+          angleField={angleField}
+          colorField={colorField}
+          radius={0.8}
+          innerRadius={0.6}
+          height={height}
+          autoFit
+          onEvent={handleEvent}
+        />
+      )
+    }
+    case 'rose': {
+      const colorField = dimensions[0]
+      const angleField = metrics[0]
+      return (
+        <Pie
+          data={data}
+          angleField={angleField}
+          colorField={colorField}
+          radius={0.8}
+          innerRadius={0.1}
+          roseType="area"
+          height={height}
+          autoFit
+          onEvent={handleEvent}
+        />
+      )
+    }
     case 'area':
       return (
         <Area
