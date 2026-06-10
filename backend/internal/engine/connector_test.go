@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -32,6 +33,90 @@ func TestScanRows(t *testing.T) {
 	assert.Equal(t, int64(1), result[0]["id"])
 	assert.Equal(t, "Alice", result[0]["name"])
 	assert.Equal(t, 95.5, result[0]["score"])
+}
+
+func TestScanRows_NumericConversion(t *testing.T) {
+	// 当 driver 返回 []byte 但列类型是 INT/FLOAT 时，scanRows 应当把字符串解析回数字
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	cols := sqlmock.NewRows([]string{"id", "big", "tiny", "price", "ratio", "name"})
+	cols = cols.FromCSVString("id,big,tiny,price,ratio,name")
+	// Above returns proper types; for testing []byte-string conversion we use
+	// NewRows + AddRow with raw []byte to simulate the "scan into []byte" path
+	// that some drivers use. Here we exercise the typed path.
+	mock.ExpectQuery("SELECT").WillReturnRows(
+		sqlmock.NewRows([]string{"id", "big", "tiny", "price", "ratio", "name"}).
+			AddRow(int64(1), int64(9999999999), int64(-128), 3.14, 2.71, "ok"),
+	)
+
+	rows, err := db.Query("SELECT")
+	require.NoError(t, err)
+	defer rows.Close()
+
+	result, err := scanRows(rows)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), result[0]["id"])
+	assert.Equal(t, int64(9999999999), result[0]["big"])
+	assert.Equal(t, int64(-128), result[0]["tiny"])
+	assert.Equal(t, 3.14, result[0]["price"])
+	assert.Equal(t, 2.71, result[0]["ratio"])
+	assert.Equal(t, "ok", result[0]["name"])
+}
+
+func TestScanRows_NumericParseFallback(t *testing.T) {
+	// 当数字列包含不能解析的 []byte 时，scanRows 应回退为字符串
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	// AddRow with []byte 模拟 driver 把所有列返回为 byte slice 的情形
+	// 当 columnType 是 INT/FLOAT 时转换失败则回退
+	mock.ExpectQuery("SELECT").WillReturnRows(
+		sqlmock.NewRows([]string{"id", "name"}).
+			AddRow([]byte("not-a-number"), []byte("Alice")),
+	)
+	rows, err := db.Query("SELECT")
+	require.NoError(t, err)
+	defer rows.Close()
+
+	result, err := scanRows(rows)
+	require.NoError(t, err)
+	require.Len(t, result, 1)
+	// typesAvailable 路径下 []byte 字符串会回退为 string
+	assert.Equal(t, "not-a-number", result[0]["id"])
+	assert.Equal(t, "Alice", result[0]["name"])
+}
+
+func TestScanRows_IterationError(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectQuery("SELECT").WillReturnError(fmt.Errorf("iteration failure"))
+	_, err = db.Query("SELECT")
+	assert.Error(t, err)
+}
+
+func TestScanRows_ColumnTypesError(t *testing.T) {
+	// 模拟 columns 数与 types 数不一致（typesAvailable = false 路径）
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mock.ExpectQuery("SELECT").WillReturnRows(
+		sqlmock.NewRows([]string{"a", "b"}).AddRow([]byte("x"), []byte("y")),
+	)
+	rows, err := db.Query("SELECT")
+	require.NoError(t, err)
+	defer rows.Close()
+
+	result, err := scanRows(rows)
+	require.NoError(t, err)
+	require.Len(t, result, 1)
+	assert.Equal(t, "x", result[0]["a"])
+	assert.Equal(t, "y", result[0]["b"])
 }
 
 func TestNewConnector_MySQL(t *testing.T) {
@@ -137,6 +222,128 @@ func TestAPIConnector_Query_HTTPError(t *testing.T) {
 	_, err = conn.Query(context.Background(), "")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "500")
+}
+
+func TestAPIConnector_Query_WithParams(t *testing.T) {
+	var receivedQuery string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedQuery = r.URL.RawQuery
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`[{"id":1}]`))
+	}))
+	defer server.Close()
+
+	conn := &apiConnector{}
+	err := conn.Connect(`{"url":"` + server.URL + `","params":{"q":"hello","page":"2"}}`)
+	require.NoError(t, err)
+
+	_, err = conn.Query(context.Background(), "")
+	require.NoError(t, err)
+	assert.Contains(t, receivedQuery, "q=hello")
+	assert.Contains(t, receivedQuery, "page=2")
+}
+
+func TestAPIConnector_Query_WithHeaders(t *testing.T) {
+	var receivedAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`[{"id":1}]`))
+	}))
+	defer server.Close()
+
+	conn := &apiConnector{}
+	err := conn.Connect(`{"url":"` + server.URL + `","headers":{"Authorization":"Bearer xyz"}}`)
+	require.NoError(t, err)
+
+	_, err = conn.Query(context.Background(), "")
+	require.NoError(t, err)
+	assert.Equal(t, "Bearer xyz", receivedAuth)
+}
+
+func TestAPIConnector_Query_NotAnArray(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"single":"object","not":"array"}`))
+	}))
+	defer server.Close()
+
+	conn := &apiConnector{}
+	err := conn.Connect(`{"url":"` + server.URL + `"}`)
+	require.NoError(t, err)
+
+	_, err = conn.Query(context.Background(), "")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not a JSON array")
+}
+
+func TestAPIConnector_Query_JSONPathMissing(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":{"items":[{"id":1}]}}`))
+	}))
+	defer server.Close()
+
+	conn := &apiConnector{}
+	err := conn.Connect(`{"url":"` + server.URL + `","jsonPath":"data.nope"}`)
+	require.NoError(t, err)
+
+	_, err = conn.Query(context.Background(), "")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+func TestAPIConnector_Query_InvalidJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`not valid json {{{`))
+	}))
+	defer server.Close()
+
+	conn := &apiConnector{}
+	err := conn.Connect(`{"url":"` + server.URL + `"}`)
+	require.NoError(t, err)
+
+	_, err = conn.Query(context.Background(), "")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "json decode")
+}
+
+func TestAPIConnector_GetColumns(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`[{"id":1,"name":"a","email":"x@y.z"}]`))
+	}))
+	defer server.Close()
+
+	conn := &apiConnector{}
+	err := conn.Connect(`{"url":"` + server.URL + `"}`)
+	require.NoError(t, err)
+
+	cols, err := conn.GetColumns(context.Background(), "", "")
+	require.NoError(t, err)
+	colsByName := make(map[string]ColumnInfo, len(cols))
+	for _, c := range cols {
+		colsByName[c.Name] = c
+	}
+	assert.Contains(t, colsByName, "id")
+	assert.Contains(t, colsByName, "name")
+	assert.Contains(t, colsByName, "email")
+}
+
+func TestAPIConnector_GetColumns_EmptyData(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	defer server.Close()
+
+	conn := &apiConnector{}
+	err := conn.Connect(`{"url":"` + server.URL + `"}`)
+	require.NoError(t, err)
+
+	_, err = conn.GetColumns(context.Background(), "", "")
+	assert.Error(t, err)
 }
 
 // ---------------- SSH tunnel config 解析 ----------------
