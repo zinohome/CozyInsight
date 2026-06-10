@@ -139,6 +139,42 @@ func TestAPIConnector_Query_HTTPError(t *testing.T) {
 	assert.Contains(t, err.Error(), "500")
 }
 
+// ---------------- SSH tunnel config 解析 ----------------
+
+func TestExtractSSHConfig_Disabled(t *testing.T) {
+	cfg, err := extractSSHConfig(`{"host":"db","port":3306}`)
+	require.NoError(t, err)
+	assert.Nil(t, cfg)
+}
+
+func TestExtractSSHConfig_Enabled(t *testing.T) {
+	cfg, err := extractSSHConfig(`{"host":"db","port":3306,"sshTunnel":{"enabled":true,"host":"bastion","port":22,"username":"ops","password":"x"}}`)
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+	assert.Equal(t, "bastion", cfg.Host)
+	assert.Equal(t, 22, cfg.Port)
+	assert.Equal(t, "ops", cfg.Username)
+	assert.Equal(t, "x", cfg.Password)
+}
+
+func TestExtractSSHConfig_EnabledButMissing(t *testing.T) {
+	_, err := extractSSHConfig(`{"sshTunnel":{"enabled":true}}`)
+	assert.Error(t, err)
+}
+
+func TestExtractSSHConfig_InvalidJSON(t *testing.T) {
+	_, err := extractSSHConfig(`not-json`)
+	assert.Error(t, err)
+}
+
+func TestNewConnectorWithTunnel_NoTunnel(t *testing.T) {
+	// 无 sshTunnel 时退化为普通 NewConnector
+	conn, tunnel, err := NewConnectorWithTunnel("mysql", `{"host":"x","port":3306,"username":"u","password":"p","database":"d"}`)
+	_ = conn
+	require.NoError(t, err)
+	assert.Nil(t, tunnel)
+}
+
 func TestOracleConnector_BuildDSN(t *testing.T) {
 	conn := &oracleConnector{}
 	dsn, err := conn.buildDSN(`{"host":"localhost","port":1521,"username":"system","password":"pass","database":"ORCL"}`)

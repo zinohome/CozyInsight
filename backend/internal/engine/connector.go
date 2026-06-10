@@ -855,3 +855,109 @@ func (c *hiveConnector) GetColumns(ctx context.Context, dbName, tableName string
 	}
 	return cols, nil
 }
+
+// ---------------- SSH 隧道集成辅助函数 ----------------
+
+// SSHConfig 描述数据源配置中的 SSH 隧道信息。
+type SSHConfig struct {
+	Enabled    bool   `json:"enabled"`
+	Host       string `json:"host"`
+	Port       int    `json:"port"`
+	Username   string `json:"username"`
+	Password   string `json:"password"`
+	PrivateKey string `json:"privateKey"`
+}
+
+// extractSSHConfig 解析 configJSON 中的 sshTunnel 字段。
+// 未启用或缺失字段时返回 (nil, nil)，由调用方按无隧道情况处理。
+func extractSSHConfig(configJSON string) (*SSHConfig, error) {
+	var raw map[string]interface{}
+	if err := json.Unmarshal([]byte(configJSON), &raw); err != nil {
+		return nil, fmt.Errorf("invalid config json: %w", err)
+	}
+	sshRaw, ok := raw["sshTunnel"]
+	if !ok {
+		return nil, nil
+	}
+	sshMap, ok := sshRaw.(map[string]interface{})
+	if !ok {
+		return nil, nil
+	}
+	enabled, _ := sshMap["enabled"].(bool)
+	if !enabled {
+		return nil, nil
+	}
+	portF, _ := sshMap["port"].(float64)
+	cfg := &SSHConfig{
+		Enabled:    true,
+		Host:       stringField(sshMap, "host"),
+		Port:       int(portF),
+		Username:   stringField(sshMap, "username"),
+		Password:   stringField(sshMap, "password"),
+		PrivateKey: stringField(sshMap, "privateKey"),
+	}
+	if cfg.Host == "" || cfg.Port <= 0 || cfg.Username == "" {
+		return nil, fmt.Errorf("sshTunnel enabled but host/port/username missing")
+	}
+	return cfg, nil
+}
+
+func stringField(m map[string]interface{}, key string) string {
+	if s, ok := m[key].(string); ok {
+		return s
+	}
+	return ""
+}
+
+// NewConnectorWithTunnel 解析 configJSON 中的 sshTunnel 段；
+// 若启用，先建立 SSH 隧道并把 connector 的 host/port 改写为 127.0.0.1:localPort。
+// 调用方负责在用完后调用 tunnel.Close()。
+func NewConnectorWithTunnel(dsType, configJSON string) (DatasourceConnector, *SSHTunnel, error) {
+	sshCfg, err := extractSSHConfig(configJSON)
+	if err != nil {
+		return nil, nil, err
+	}
+	if sshCfg == nil {
+		conn, err := NewConnector(dsType)
+		return conn, nil, err
+	}
+
+	// 解析原 host/port 供隧道使用
+	var raw map[string]interface{}
+	if err := json.Unmarshal([]byte(configJSON), &raw); err != nil {
+		return nil, nil, fmt.Errorf("invalid config json: %w", err)
+	}
+	host, _ := raw["host"].(string)
+	portF, _ := raw["port"].(float64)
+	port := int(portF)
+	if host == "" || port <= 0 {
+		return nil, nil, fmt.Errorf("sshTunnel requires data source host and port")
+	}
+
+	// 本地端口 = 0 让系统分配空闲端口
+	tunnel, err := NewSSHTunnel(sshCfg.Host, sshCfg.Port, sshCfg.Username, sshCfg.Password, sshCfg.PrivateKey,
+		host, port, 0)
+	if err != nil {
+		return nil, nil, fmt.Errorf("ssh tunnel create failed: %w", err)
+	}
+
+	// 改写 host/port 指向隧道本地端口
+	raw["host"] = "127.0.0.1"
+	raw["port"] = float64(tunnel.LocalPort())
+	patchedJSON, err := json.Marshal(raw)
+	if err != nil {
+		_ = tunnel.Close()
+		return nil, nil, fmt.Errorf("rewrite config for tunnel failed: %w", err)
+	}
+
+	conn, err := NewConnector(dsType)
+	if err != nil {
+		_ = tunnel.Close()
+		return nil, nil, err
+	}
+	if err := conn.Connect(string(patchedJSON)); err != nil {
+		_ = tunnel.Close()
+		return nil, nil, fmt.Errorf("connect through tunnel failed: %w", err)
+	}
+	return conn, tunnel, nil
+}
