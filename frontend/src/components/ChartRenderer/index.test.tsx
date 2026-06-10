@@ -116,6 +116,16 @@ describe('ChartRenderer', () => {
     expect(screen.getByTestId('scatter-chart')).toBeInTheDocument()
   })
 
+  it('should render bubble chart', () => {
+    render(<ChartRenderer type="bubble" data={baseData} config={{ dimensions: ['month', 'category'], metrics: ['sales', 'count'] }} />)
+    expect(screen.getByTestId('scatter-chart')).toBeInTheDocument()
+  })
+
+  it('should render waterfall chart', () => {
+    render(<ChartRenderer type="waterfall" data={baseData} config={baseConfig} />)
+    expect(screen.getByTestId('bar-chart')).toBeInTheDocument()
+  })
+
   it('should render radar chart', () => {
     render(<ChartRenderer type="radar" data={baseData} config={baseConfig} />)
     expect(screen.getByTestId('radar-chart')).toBeInTheDocument()

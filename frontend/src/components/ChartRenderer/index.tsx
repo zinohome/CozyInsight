@@ -224,6 +224,22 @@ export default function ChartRenderer({ type, data, config, height = 300, onEven
           onEvent={handleEvent}
         />
       )
+    case 'bubble': {
+      const sizeField = metrics[1] || metrics[0]
+      const colorField = dimensions[1] || dimensions[0]
+      return (
+        <Scatter
+          data={data}
+          xField={xField}
+          yField={yField}
+          colorField={colorField}
+          sizeField={sizeField}
+          height={height}
+          autoFit
+          onEvent={handleEvent}
+        />
+      )
+    }
     case 'radar':
       return (
         <Radar
@@ -298,6 +314,30 @@ export default function ChartRenderer({ type, data, config, height = 300, onEven
       return (
         <Gauge
           percent={percent}
+          height={height}
+          autoFit
+          onEvent={handleEvent}
+        />
+      )
+    }
+    case 'waterfall': {
+      // 瀑布图需要数据预处理：累加值
+      const processed = data.map((item, index) => {
+        const prev = index > 0 ? data[index - 1] : null
+        const prevY = prev ? Number(prev[yField]) || 0 : 0
+        const currY = Number(item[yField]) || 0
+        return {
+          ...item,
+          __start__: index > 0 ? prevY : 0,
+          __end__: currY,
+        }
+      })
+      return (
+        <Bar
+          data={processed}
+          xField={xField}
+          yField="__end__"
+          meta={{ __start__: { alias: '起始值' }, __end__: { alias: '结束值' } }}
           height={height}
           autoFit
           onEvent={handleEvent}
