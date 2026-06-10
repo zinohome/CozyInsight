@@ -175,6 +175,22 @@ describe('ChartRenderer', () => {
     expect(screen.getByText(kpiData[0].sales.toLocaleString())).toBeInTheDocument()
   })
 
+  it('should render pivot table', () => {
+    const pivotData = [
+      { region: 'North', product: 'A', sales: 100 },
+      { region: 'North', product: 'B', sales: 200 },
+      { region: 'South', product: 'A', sales: 150 },
+    ]
+    const { container } = render(
+      <ChartRenderer
+        type="pivot-table"
+        data={pivotData}
+        config={{ dimensions: ['region', 'product'], metrics: ['sales'] }}
+      />
+    )
+    expect(container.querySelector('table')).toBeInTheDocument()
+  })
+
   it('should render table chart', () => {
     const { container } = render(<ChartRenderer type="table" data={baseData} config={baseConfig} />)
     expect(container.querySelector('table')).toBeInTheDocument()

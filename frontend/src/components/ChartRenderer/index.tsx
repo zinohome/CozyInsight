@@ -341,6 +341,46 @@ export default function ChartRenderer({ type, data, config, height = 300, onEven
         </div>
       )
     }
+    case 'pivot-table': {
+      const rowField = dimensions[0]
+      const colField = dimensions[1] || dimensions[0]
+      const pivotMetric = metrics[0]
+
+      // 构建透视数据结构
+      const rowKeys = [...new Set(data.map(d => String(d[rowField])))]
+      const colKeys = [...new Set(data.map(d => String(d[colField])))]
+
+      const pivotData = rowKeys.map(row => {
+        const rowObj: Record<string, unknown> = { [rowField]: row }
+        for (const col of colKeys) {
+          const match = data.find(
+            d => String(d[rowField]) === row && String(d[colField]) === col
+          )
+          rowObj[col] = match ? Number(match[pivotMetric]) : 0
+        }
+        return rowObj
+      })
+
+      const columns: ColumnsType<Record<string, unknown>> = [
+        { title: rowField, dataIndex: rowField, key: rowField, fixed: 'left' },
+        ...colKeys.map(col => ({
+          title: col,
+          dataIndex: col,
+          key: col,
+          align: 'right' as const,
+        })),
+      ]
+
+      return (
+        <Table
+          columns={columns}
+          dataSource={pivotData}
+          rowKey={(_, idx) => idx!}
+          pagination={false}
+          scroll={{ x: 'max-content' }}
+        />
+      )
+    }
     case 'waterfall': {
       // 瀑布图需要数据预处理：累加值
       const processed = data.map((item, index) => {
