@@ -58,6 +58,63 @@ export default function ChartRenderer({ type, data, config, height = 300, onEven
           onEvent={handleEvent}
         />
       )
+    case 'stacked-bar': {
+      const seriesField = dimensions[1] || dimensions[0]
+      return (
+        <Bar
+          data={data}
+          xField={xField}
+          yField={yField}
+          seriesField={seriesField}
+          isStack
+          height={height}
+          autoFit
+          onEvent={handleEvent}
+        />
+      )
+    }
+    case 'horizontal-bar':
+      return (
+        <Bar
+          data={data}
+          xField={yField}
+          yField={xField}
+          height={height}
+          autoFit
+          onEvent={handleEvent}
+        />
+      )
+    case 'grouped-bar': {
+      const seriesField = dimensions[1] || dimensions[0]
+      return (
+        <Bar
+          data={data}
+          xField={xField}
+          yField={yField}
+          seriesField={seriesField}
+          isGroup
+          height={height}
+          autoFit
+          onEvent={handleEvent}
+        />
+      )
+    }
+    case 'percent-bar': {
+      const seriesField = dimensions[1] || dimensions[0]
+      return (
+        <Bar
+          data={data}
+          xField={xField}
+          yField={yField}
+          seriesField={seriesField}
+          isPercent
+          isStack
+          height={height}
+          autoFit
+          onEvent={handleEvent}
+        />
+      )
+    }
     case 'line':
       return (
         <Line

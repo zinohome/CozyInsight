@@ -56,6 +56,26 @@ describe('ChartRenderer', () => {
     expect(screen.getByTestId('bar-chart')).toBeInTheDocument()
   })
 
+  it('should render stacked bar chart', () => {
+    render(<ChartRenderer type="stacked-bar" data={baseData} config={{ dimensions: ['month', 'category'], metrics: ['sales'] }} />)
+    expect(screen.getByTestId('bar-chart')).toBeInTheDocument()
+  })
+
+  it('should render horizontal bar chart', () => {
+    render(<ChartRenderer type="horizontal-bar" data={baseData} config={baseConfig} />)
+    expect(screen.getByTestId('bar-chart')).toBeInTheDocument()
+  })
+
+  it('should render grouped bar chart', () => {
+    render(<ChartRenderer type="grouped-bar" data={baseData} config={{ dimensions: ['month', 'category'], metrics: ['sales'] }} />)
+    expect(screen.getByTestId('bar-chart')).toBeInTheDocument()
+  })
+
+  it('should render percent bar chart', () => {
+    render(<ChartRenderer type="percent-bar" data={baseData} config={{ dimensions: ['month', 'category'], metrics: ['sales'] }} />)
+    expect(screen.getByTestId('bar-chart')).toBeInTheDocument()
+  })
+
   it('should render line chart', () => {
     render(<ChartRenderer type="line" data={baseData} config={baseConfig} />)
     expect(screen.getByTestId('line-chart')).toBeInTheDocument()
