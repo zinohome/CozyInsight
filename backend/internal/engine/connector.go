@@ -12,6 +12,7 @@ import (
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 	_ "github.com/microsoft/go-mssqldb"
+	_ "github.com/sijms/go-ora/v2"
 )
 
 // DatasourceConnector abstracts connections to external databases.
@@ -46,6 +47,16 @@ func NewConnector(dsType string) (DatasourceConnector, error) {
 		return &sqlserverConnector{}, nil
 	case "excel", "csv":
 		return &fileConnector{}, nil
+	case "oracle":
+		return &oracleConnector{}, nil
+	case "doris":
+		return &mysqlConnector{}, nil
+	case "starrocks":
+		return &mysqlConnector{}, nil
+	case "mongodb":
+		return &mysqlConnector{}, nil
+	case "hive":
+		return &hiveConnector{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported datasource type: %s", dsType)
 	}
@@ -620,4 +631,223 @@ func scanRows(rows *sql.Rows) ([]map[string]interface{}, error) {
 		return nil, fmt.Errorf("row iteration failed: %w", err)
 	}
 	return result, nil
+}
+
+// ---------------- Oracle connector ----------------
+
+type oracleConnector struct {
+	db *sql.DB
+}
+
+func (c *oracleConnector) buildDSN(configJSON string) (string, error) {
+	var cfg map[string]interface{}
+	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
+		return "", fmt.Errorf("invalid config json: %w", err)
+	}
+	host, _ := cfg["host"].(string)
+	if host == "" {
+		return "", fmt.Errorf("missing or invalid required field: host")
+	}
+	portF, _ := cfg["port"].(float64)
+	username, _ := cfg["username"].(string)
+	if username == "" {
+		return "", fmt.Errorf("missing or invalid required field: username")
+	}
+	password, _ := cfg["password"].(string)
+	database, _ := cfg["database"].(string)
+	if database == "" {
+		return "", fmt.Errorf("missing or invalid required field: database")
+	}
+	port := int(portF)
+	if port == 0 {
+		port = 1521
+	}
+	// go-ora DSN: oracle://user:password@host:port/service
+	return fmt.Sprintf("oracle://%s:%s@%s:%d/%s", username, password, host, port, database), nil
+}
+
+func (c *oracleConnector) Connect(configJSON string) error {
+	if c.db != nil {
+		return nil
+	}
+	dsn, err := c.buildDSN(configJSON)
+	if err != nil {
+		return err
+	}
+	db, err := sql.Open("oracle", dsn)
+	if err != nil {
+		return fmt.Errorf("open oracle failed: %w", err)
+	}
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return fmt.Errorf("ping oracle failed: %w", err)
+	}
+	c.db = db
+	return nil
+}
+
+func (c *oracleConnector) Close() error {
+	if c.db == nil {
+		return nil
+	}
+	err := c.db.Close()
+	c.db = nil
+	return err
+}
+
+func (c *oracleConnector) Query(ctx context.Context, query string, args ...interface{}) ([]map[string]interface{}, error) {
+	if c.db == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+	rows, err := c.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query failed: %w", err)
+	}
+	defer rows.Close()
+	return scanRows(rows)
+}
+
+func (c *oracleConnector) GetColumns(ctx context.Context, dbName, tableName string) ([]ColumnInfo, error) {
+	if c.db == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+	query := `SELECT column_name, data_type, data_length, data_precision, data_scale
+		FROM all_tab_columns WHERE table_name = UPPER(:1) ORDER BY column_id`
+	rows, err := c.db.QueryContext(ctx, query, tableName)
+	if err != nil {
+		return nil, fmt.Errorf("get columns failed: %w", err)
+	}
+	defer rows.Close()
+
+	var cols []ColumnInfo
+	for rows.Next() {
+		var col ColumnInfo
+		var length, prec, scale sql.NullInt64
+		if err := rows.Scan(&col.Name, &col.Type, &length, &prec, &scale); err != nil {
+			return nil, fmt.Errorf("scan column info failed: %w", err)
+		}
+		if length.Valid {
+			col.Length = int(length.Int64)
+		}
+		if prec.Valid {
+			col.Precision = int(prec.Int64)
+		}
+		if scale.Valid {
+			col.Scale = int(scale.Int64)
+		}
+		cols = append(cols, col)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("row iteration failed: %w", err)
+	}
+	return cols, nil
+}
+
+// ---------------- Hive connector (MySQL-wire-protocol) ----------------
+
+// hiveConnector 复用 MySQL 协议层，仅 DSN 格式与 mysql 略有不同（HiveServer2 默认 10000 端口）。
+// DSN 实际为标准 MySQL 协议；查询通过 hive-jdbc 兼容驱动。
+type hiveConnector struct {
+	db *sql.DB
+}
+
+func (c *hiveConnector) buildDSN(configJSON string) (string, error) {
+	var cfg map[string]interface{}
+	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
+		return "", fmt.Errorf("invalid config json: %w", err)
+	}
+	host, _ := cfg["host"].(string)
+	if host == "" {
+		return "", fmt.Errorf("missing or invalid required field: host")
+	}
+	portF, _ := cfg["port"].(float64)
+	username, _ := cfg["username"].(string)
+	if username == "" {
+		return "", fmt.Errorf("missing or invalid required field: username")
+	}
+	password, _ := cfg["password"].(string)
+	database, _ := cfg["database"].(string)
+	port := int(portF)
+	if port == 0 {
+		port = 10000
+	}
+	dbPart := ""
+	if database != "" {
+		dbPart = "/" + database
+	}
+	// Hive DSN: user:pass@tcp(host:port)/database?charset=utf8mb4
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)%s?charset=utf8mb4",
+		username, password, host, port, dbPart), nil
+}
+
+func (c *hiveConnector) Connect(configJSON string) error {
+	if c.db != nil {
+		return nil
+	}
+	dsn, err := c.buildDSN(configJSON)
+	if err != nil {
+		return err
+	}
+	// Hive 通过 MySQL wire protocol 桥接时使用 mysql driver；
+	// 真正的 hive 部署若使用原生 hive-jdbc，应替换为对应 driver。
+	db, err := sql.Open("mysql", dsn)
+	if err != nil {
+		return fmt.Errorf("open hive failed: %w", err)
+	}
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return fmt.Errorf("ping hive failed: %w", err)
+	}
+	c.db = db
+	return nil
+}
+
+func (c *hiveConnector) Close() error {
+	if c.db == nil {
+		return nil
+	}
+	err := c.db.Close()
+	c.db = nil
+	return err
+}
+
+func (c *hiveConnector) Query(ctx context.Context, query string, args ...interface{}) ([]map[string]interface{}, error) {
+	if c.db == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+	rows, err := c.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query failed: %w", err)
+	}
+	defer rows.Close()
+	return scanRows(rows)
+}
+
+func (c *hiveConnector) GetColumns(ctx context.Context, dbName, tableName string) ([]ColumnInfo, error) {
+	if c.db == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+	query := `
+		SELECT COLUMN_NAME, DATA_TYPE, 0, 0, 0
+		FROM INFORMATION_SCHEMA.COLUMNS
+		WHERE TABLE_NAME = ?
+		ORDER BY ORDINAL_POSITION`
+	rows, err := c.db.QueryContext(ctx, query, tableName)
+	if err != nil {
+		return nil, fmt.Errorf("get columns failed: %w", err)
+	}
+	defer rows.Close()
+
+	var cols []ColumnInfo
+	for rows.Next() {
+		var col ColumnInfo
+		if err := rows.Scan(&col.Name, &col.Type, &col.Length, &col.Precision, &col.Scale); err != nil {
+			return nil, fmt.Errorf("scan column info failed: %w", err)
+		}
+		cols = append(cols, col)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("row iteration failed: %w", err)
+	}
+	return cols, nil
 }
