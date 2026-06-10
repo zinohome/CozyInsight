@@ -80,6 +80,32 @@ export interface ChartJumpConfig {
   paramsMapping?: Array<{ sourceField: string; targetParam: string }>
 }
 
+/** 图表样式选项 — 通用配置（标题/图例/标签） */
+export interface ChartStyleOptions {
+  // 通用
+  title?: string
+  showLegend?: boolean
+  legendPosition?: 'top' | 'right' | 'bottom' | 'left'
+  showLabel?: boolean
+  labelFormat?: 'auto' | 'integer' | 'percent' | 'currency'
+  // 坐标轴类（bar/line/area）
+  smooth?: boolean
+  isStack?: boolean
+  radius?: number
+  // 饼图类
+  innerRadius?: number
+  roseType?: 'radius' | 'area'
+  // gauge
+  min?: number
+  max?: number
+  // kpi
+  prefix?: string
+  suffix?: string
+  thresholds?: Array<{ value: number; color: string }>
+  // heatmap
+  colorScheme?: 'blue' | 'green' | 'red' | 'rainbow'
+}
+
 export interface ChartConfig {
   dimensions: ChartDimension[]
   metrics: ChartMetric[]
@@ -88,6 +114,7 @@ export interface ChartConfig {
   limit?: number
   drillDown?: ChartDrillConfig
   jumpConfig?: ChartJumpConfig
+  options?: ChartStyleOptions
 }
 
 export interface ChartDataResponse {
@@ -116,7 +143,11 @@ export interface ChartRendererProps {
   config: {
     dimensions: string[]
     metrics: string[]
+    options?: ChartStyleOptions
   }
   height?: number
   onEvent?: (event: ChartEvent) => void
+  loading?: boolean
+  error?: string | null
+  onRetry?: () => void
 }

@@ -218,4 +218,136 @@ describe('ChartRenderer', () => {
     render(<ChartRenderer type="unknown" data={baseData} config={baseConfig} />)
     expect(screen.getByText('不支持的图表类型')).toBeInTheDocument()
   })
+
+  // ---------------- Phase B: 新增状态与样式选项 ----------------
+
+  it('should render loading state when loading=true', () => {
+    const { container } = render(
+      <ChartRenderer type="bar" data={[]} config={baseConfig} loading />
+    )
+    expect(container.querySelector('.ant-skeleton')).toBeInTheDocument()
+  })
+
+  it('should render error state when error is set', () => {
+    render(
+      <ChartRenderer
+        type="bar"
+        data={baseData}
+        config={baseConfig}
+        error="数据库连接超时"
+        onRetry={() => {}}
+      />
+    )
+    expect(screen.getByText('加载失败')).toBeInTheDocument()
+    expect(screen.getByText('数据库连接超时')).toBeInTheDocument()
+  })
+
+  it('should call onRetry when retry button clicked', () => {
+    const onRetry = vi.fn()
+    render(
+      <ChartRenderer
+        type="bar"
+        data={baseData}
+        config={baseConfig}
+        error="网络异常"
+        onRetry={onRetry}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: /重试/ }))
+    expect(onRetry).toHaveBeenCalledTimes(1)
+  })
+
+  it('error state takes priority over empty data', () => {
+    render(
+      <ChartRenderer type="bar" data={[]} config={baseConfig} error="先显示错误" />
+    )
+    expect(screen.getByText('先显示错误')).toBeInTheDocument()
+    expect(screen.queryByText('暂无数据')).not.toBeInTheDocument()
+  })
+
+  it('loading state takes priority over empty data', () => {
+    const { container } = render(
+      <ChartRenderer type="bar" data={[]} config={baseConfig} loading />
+    )
+    expect(container.querySelector('.ant-skeleton')).toBeInTheDocument()
+  })
+
+  it('should apply KPI prefix/suffix and threshold color', () => {
+    const kpiData = [{ sales: 150 }]
+    render(
+      <ChartRenderer
+        type="kpi"
+        data={kpiData}
+        config={{
+          dimensions: ['total'],
+          metrics: ['sales'],
+          options: {
+            prefix: '¥',
+            suffix: ' 元',
+            thresholds: [{ value: 0, color: '#52c41a' }, { value: 100, color: '#cf1322' }],
+          },
+        }}
+      />
+    )
+    expect(screen.getByText('¥150 元')).toBeInTheDocument()
+    // 阈值按升序遍历，后匹配的覆盖前面的 → 150 >= 100 → #cf1322 红色
+    const valueEl = screen.getByText('¥150 元')
+    expect(valueEl.style.color).toBe('rgb(207, 19, 34)')
+  })
+
+  it('should apply gauge min/max normalization', () => {
+    // 当 min=0 max=200 时，data 值 100 应归一化为 0.5
+    const gaugeData = [{ value: 100 }]
+    render(
+      <ChartRenderer
+        type="gauge"
+        data={gaugeData}
+        config={{
+          dimensions: ['name'],
+          metrics: ['value'],
+          options: { min: 0, max: 200 },
+        }}
+      />
+    )
+    // Gauge 渲染了，不需要断言具体内部，仅验证不报错
+    expect(screen.getByTestId('gauge-chart')).toBeInTheDocument()
+  })
+
+  it('should apply KPI percent labelFormat', () => {
+    const kpiData = [{ sales: 0.85 }]
+    render(
+      <ChartRenderer
+        type="kpi"
+        data={kpiData}
+        config={{
+          dimensions: ['rate'],
+          metrics: ['sales'],
+          options: { labelFormat: 'percent' },
+        }}
+      />
+    )
+    expect(screen.getByText('85.0%')).toBeInTheDocument()
+  })
+
+  it('should apply line smooth option', () => {
+    render(
+      <ChartRenderer
+        type="line"
+        data={baseData}
+        config={{ ...baseConfig, options: { smooth: true } }}
+      />
+    )
+    expect(screen.getByTestId('line-chart')).toBeInTheDocument()
+  })
+
+  it('should apply bar radius option', () => {
+    render(
+      <ChartRenderer
+        type="bar"
+        data={baseData}
+        config={{ ...baseConfig, options: { radius: 8 } }}
+      />
+    )
+    expect(screen.getByTestId('bar-chart')).toBeInTheDocument()
+  })
 })

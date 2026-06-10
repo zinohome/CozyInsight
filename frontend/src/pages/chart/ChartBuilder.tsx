@@ -4,7 +4,8 @@ import { Button, Select, Card, Space, Tag, InputNumber, Radio, Input, message } 
 import { chartAPI } from '@/api/chart'
 import { datasetAPI } from '@/api/dataset'
 import ChartRenderer from '@/components/ChartRenderer'
-import type { Chart, ChartConfig, ChartFilter, ChartDataResponse } from '@/types/chart'
+import ChartOptionsPanel from '@/components/ChartRenderer/ChartOptionsPanel'
+import type { Chart, ChartConfig, ChartFilter, ChartDataResponse, ChartStyleOptions } from '@/types/chart'
 import type { PreviewDataResponse } from '@/types/dataset'
 
 export default function ChartBuilder() {
@@ -15,8 +16,10 @@ export default function ChartBuilder() {
   const [chartType, setChartType] = useState<string>('bar')
   const [previewData, setPreviewData] = useState<ChartDataResponse | null>(null)
   const [loading, setLoading] = useState(false)
+  const [previewError, setPreviewError] = useState<string | null>(null)
   const [showJumpConfig, setShowJumpConfig] = useState(false)
   const [showDrillConfig, setShowDrillConfig] = useState(false)
+  const [showStyleConfig, setShowStyleConfig] = useState(false)
 
   const fetchChart = useCallback(async () => {
     if (!id) return
@@ -49,6 +52,7 @@ export default function ChartBuilder() {
   const handlePreview = async () => {
     if (!chart) return
     setLoading(true)
+    setPreviewError(null)
     try {
       // Save current config to chart first
       await chartAPI.update(chart.id, {
@@ -58,7 +62,9 @@ export default function ChartBuilder() {
       const data = await chartAPI.getData(chart.id)
       setPreviewData(data)
     } catch (e) {
-      message.error('预览失败: ' + (e instanceof Error ? e.message : '未知错误'))
+      const msg = e instanceof Error ? e.message : '未知错误'
+      setPreviewError(msg)
+      message.error('预览失败: ' + msg)
     } finally {
       setLoading(false)
     }
@@ -229,6 +235,7 @@ export default function ChartBuilder() {
             <Button type="primary" onClick={handlePreview} loading={loading}>预览</Button>
             <Button onClick={() => setShowDrillConfig(v => !v)}>{showDrillConfig ? '隐藏' : '配置'}下钻</Button>
             <Button onClick={() => setShowJumpConfig(v => !v)}>{showJumpConfig ? '隐藏' : '配置'}跳转</Button>
+            <Button onClick={() => setShowStyleConfig(v => !v)}>{showStyleConfig ? '隐藏' : '配置'}样式</Button>
           </Space>
 
           {showDrillConfig && (
@@ -369,6 +376,16 @@ export default function ChartBuilder() {
               </Space>
             </Card>
           )}
+
+          {showStyleConfig && (
+            <ChartOptionsPanel
+              chartType={chartType}
+              options={config.options || {}}
+              onChange={(next: ChartStyleOptions) =>
+                setConfig(prev => ({ ...prev, options: next }))
+              }
+            />
+          )}
         </Card>
 
         {previewData && (
@@ -376,8 +393,15 @@ export default function ChartBuilder() {
             <ChartRenderer
               type={chartType}
               data={previewData.data}
-              config={{ dimensions: previewData.dimensions, metrics: previewData.metrics }}
+              config={{
+                dimensions: previewData.dimensions,
+                metrics: previewData.metrics,
+                options: config.options,
+              }}
               height={400}
+              loading={loading}
+              error={previewError}
+              onRetry={handlePreview}
             />
           </Card>
         )}

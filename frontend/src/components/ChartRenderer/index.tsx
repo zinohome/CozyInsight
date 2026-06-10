@@ -2,18 +2,47 @@ import { useCallback } from 'react'
 import { Bar, Line, Pie, Area, Scatter, Radar, Funnel, WordCloud, Sankey, Heatmap, Treemap, Gauge, DualAxes } from '@ant-design/charts'
 import { Table } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import type { ChartRendererProps, ChartEvent } from '../../types/chart'
+import type { ChartRendererProps, ChartEvent, ChartStyleOptions } from '../../types/chart'
+import { ChartEmpty, ChartLoading, ChartError } from './ChartState'
 
-export default function ChartRenderer({ type, data, config, height = 300, onEvent }: ChartRendererProps) {
+const formatValue = (v: unknown, format: ChartStyleOptions['labelFormat']) => {
+  if (v == null) return ''
+  const num = Number(v)
+  if (Number.isNaN(num)) return String(v)
+  switch (format) {
+    case 'integer':
+      return num.toFixed(0)
+    case 'percent':
+      return `${(num * 100).toFixed(1)}%`
+    case 'currency':
+      return `¥${num.toLocaleString()}`
+    default:
+      return num.toLocaleString()
+  }
+}
+
+export default function ChartRenderer({
+  type,
+  data,
+  config,
+  height = 300,
+  onEvent,
+  loading = false,
+  error = null,
+  onRetry,
+}: ChartRendererProps) {
+  // 状态优先级：error > loading > empty
+  if (error) {
+    return <ChartError error={error} onRetry={onRetry} height={height} />
+  }
+  if (loading) {
+    return <ChartLoading height={height} />
+  }
   if (!data || data.length === 0) {
-    return (
-      <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
-        暂无数据
-      </div>
-    )
+    return <ChartEmpty height={height} />
   }
 
-  const { dimensions, metrics } = config
+  const { dimensions, metrics, options = {} } = config
   if (dimensions.length === 0 || metrics.length === 0) {
     return (
       <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
@@ -55,6 +84,7 @@ export default function ChartRenderer({ type, data, config, height = 300, onEven
           yField={yField}
           height={height}
           autoFit
+          radius={options.radius}
           onEvent={handleEvent}
         />
       )
@@ -123,6 +153,7 @@ export default function ChartRenderer({ type, data, config, height = 300, onEven
           yField={yField}
           height={height}
           autoFit
+          smooth={options.smooth}
           onEvent={handleEvent}
         />
       )
@@ -206,7 +237,7 @@ export default function ChartRenderer({ type, data, config, height = 300, onEven
           xField={xField}
           yField={yField}
           seriesField={seriesField}
-          isStack
+          stack
           height={height}
           autoFit
           onEvent={handleEvent}
@@ -310,7 +341,14 @@ export default function ChartRenderer({ type, data, config, height = 300, onEven
       )
     case 'gauge': {
       let percent = Number(data[0]?.[yField]) || 0
-      percent = Math.max(0, Math.min(1, percent))
+      const minVal = options.min ?? 0
+      const maxVal = options.max ?? 1
+      // 把数据值归一化到 [0, 1]
+      if (maxVal > minVal) {
+        percent = Math.max(0, Math.min(1, (percent - minVal) / (maxVal - minVal)))
+      } else {
+        percent = 0
+      }
       return (
         <Gauge
           percent={percent}
@@ -322,7 +360,15 @@ export default function ChartRenderer({ type, data, config, height = 300, onEven
     }
     case 'kpi': {
       const value = Number(data[0]?.[yField]) || 0
-      const title = config.dimensions[0] || '指标'
+      const title = options.title || config.dimensions[0] || '指标'
+      const prefix = options.prefix || ''
+      const suffix = options.suffix || ''
+      // 阈值色：取当前值匹配的最大阈值对应的颜色
+      const thresholds = options.thresholds || []
+      let color = '#333'
+      for (const t of thresholds) {
+        if (value >= t.value) color = t.color
+      }
       return (
         <div
           style={{
@@ -335,8 +381,8 @@ export default function ChartRenderer({ type, data, config, height = 300, onEven
           }}
         >
           <div style={{ fontSize: 14, color: '#666' }}>{title}</div>
-          <div style={{ fontSize: 36, fontWeight: 600, color: '#333' }}>
-            {value.toLocaleString()}
+          <div style={{ fontSize: 36, fontWeight: 600, color }}>
+            {prefix}{formatValue(value, options.labelFormat)}{suffix}
           </div>
         </div>
       )
