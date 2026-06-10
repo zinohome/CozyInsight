@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { Bar, Line, Pie, Area, Scatter, Radar, Funnel, WordCloud, Sankey, Heatmap, Treemap, Gauge } from '@ant-design/charts'
+import { Bar, Line, Pie, Area, Scatter, Radar, Funnel, WordCloud, Sankey, Heatmap, Treemap, Gauge, DualAxes } from '@ant-design/charts'
 import { Table } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type { ChartRendererProps, ChartEvent } from '../../types/chart'
@@ -340,6 +340,24 @@ export default function ChartRenderer({ type, data, config, height = 300, onEven
           meta={{ __start__: { alias: '起始值' }, __end__: { alias: '结束值' } }}
           height={height}
           autoFit
+          onEvent={handleEvent}
+        />
+      )
+    }
+    case 'combo': {
+      // 组合图：第一个指标为柱，第二个为线（DualAxes 双轴图）
+      const lineMetric = metrics[1] || metrics[0]
+      return (
+        <DualAxes
+          data={[data, data]}
+          xField={xField}
+          yField={[yField, lineMetric]}
+          height={height}
+          autoFit
+          geometryOptions={[
+            { geometry: 'column' },
+            { geometry: 'line', lineStyle: { lineWidth: 2 } },
+          ]}
           onEvent={handleEvent}
         />
       )

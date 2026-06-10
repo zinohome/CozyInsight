@@ -24,6 +24,7 @@ vi.mock('@ant-design/charts', () => ({
   Heatmap: () => <div data-testid="heatmap-chart" />,
   Treemap: () => <div data-testid="treemap-chart" />,
   Gauge: () => <div data-testid="gauge-chart" />,
+  DualAxes: () => <div data-testid="dualaxes-chart" />,
 }))
 
 describe('ChartRenderer', () => {
@@ -124,6 +125,11 @@ describe('ChartRenderer', () => {
   it('should render waterfall chart', () => {
     render(<ChartRenderer type="waterfall" data={baseData} config={baseConfig} />)
     expect(screen.getByTestId('bar-chart')).toBeInTheDocument()
+  })
+
+  it('should render combo chart', () => {
+    render(<ChartRenderer type="combo" data={baseData} config={{ dimensions: ['month'], metrics: ['sales', 'count'] }} />)
+    expect(screen.getByTestId('dualaxes-chart')).toBeInTheDocument()
   })
 
   it('should render radar chart', () => {
