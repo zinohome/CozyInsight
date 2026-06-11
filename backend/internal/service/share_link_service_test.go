@@ -86,3 +86,76 @@ func TestShareLinkService_GetDashboard_Expired(t *testing.T) {
 	assert.Contains(t, err.Error(), "expired")
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestShareLinkService_ListByUser(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := repository.NewShareLinkRepository(sqlx.NewDb(db, "mysql"))
+	dashboardRepo := repository.NewDashboardRepository(sqlx.NewDb(db, "mysql"))
+	svc := NewShareLinkService(repo, dashboardRepo)
+
+	now := time.Now()
+	columns := []string{"id", "token", "resource_type", "resource_id", "created_by", "expire_at", "status", "created_at"}
+	mock.ExpectQuery("FROM share_links WHERE created_by = \\? AND status = 1").
+		WithArgs(7).
+		WillReturnRows(sqlmock.NewRows(columns).
+			AddRow(1, "tok1", "dashboard", 100, 7, nil, 1, now).
+			AddRow(2, "tok2", "screen", 200, 7, nil, 1, now))
+
+	links, err := svc.ListByUser(context.Background(), 7)
+	require.NoError(t, err)
+	assert.Len(t, links, 2)
+	assert.Equal(t, "tok1", links[0].Token)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestShareLinkService_Revoke_Success(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := repository.NewShareLinkRepository(sqlx.NewDb(db, "mysql"))
+	dashboardRepo := repository.NewDashboardRepository(sqlx.NewDb(db, "mysql"))
+	svc := NewShareLinkService(repo, dashboardRepo)
+
+	now := time.Now()
+	columns := []string{"id", "token", "resource_type", "resource_id", "created_by", "expire_at", "status", "created_at"}
+	// 1. FindByToken
+	mock.ExpectQuery("FROM share_links WHERE token = \\? AND status = 1").
+		WithArgs("tok1").
+		WillReturnRows(sqlmock.NewRows(columns).AddRow(
+			1, "tok1", "dashboard", 100, 7, nil, 1, now,
+		))
+	// 2. Delete
+	mock.ExpectExec("UPDATE share_links SET status = 0").
+		WithArgs(1).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	err = svc.Revoke(context.Background(), "tok1", 7)
+	require.NoError(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestShareLinkService_Revoke_NotOwner(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	repo := repository.NewShareLinkRepository(sqlx.NewDb(db, "mysql"))
+	dashboardRepo := repository.NewDashboardRepository(sqlx.NewDb(db, "mysql"))
+	svc := NewShareLinkService(repo, dashboardRepo)
+
+	now := time.Now()
+	columns := []string{"id", "token", "resource_type", "resource_id", "created_by", "expire_at", "status", "created_at"}
+	// link is owned by user 99, but caller is 7
+	mock.ExpectQuery("FROM share_links WHERE token = \\? AND status = 1").
+		WithArgs("tok1").
+		WillReturnRows(sqlmock.NewRows(columns).AddRow(
+			1, "tok1", "dashboard", 100, 99, nil, 1, now,
+		))
+
+	err = svc.Revoke(context.Background(), "tok1", 7)
+	assert.ErrorIs(t, err, ErrNotOwner)
+}

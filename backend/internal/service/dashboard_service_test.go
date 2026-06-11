@@ -305,6 +305,76 @@ func TestDashboardService_DisableShare(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestDashboardService_EnableShare_NotOwner(t *testing.T) {
+	db, mock := testutil.NewMockDB(t)
+	repo := repository.NewDashboardRepository(db)
+	shareLinkRepo := repository.NewShareLinkRepository(db)
+	svc := NewDashboardService(repo, shareLinkRepo)
+
+	dbColumns := []string{"id", "title", "type", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	now := time.Now()
+	// Dashboard owned by user 99, caller is 7
+	mock.ExpectQuery("SELECT \\* FROM dashboards WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(dbColumns).AddRow(
+			1, "Test", "dashboard", "{}", "", 0, 1, 99, now, now, nil,
+		))
+
+	_, err := svc.EnableShare(context.Background(), 1, 7, "", 0)
+	assert.ErrorIs(t, err, ErrNotOwner)
+}
+
+func TestDashboardService_EnableShare_WithExpire(t *testing.T) {
+	db, mock := testutil.NewMockDB(t)
+	repo := repository.NewDashboardRepository(db)
+	shareLinkRepo := repository.NewShareLinkRepository(db)
+	svc := NewDashboardService(repo, shareLinkRepo)
+
+	dbColumns := []string{"id", "title", "type", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	now := time.Now()
+	mock.ExpectQuery("SELECT \\* FROM dashboards WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(dbColumns).AddRow(
+			1, "Test", "dashboard", "{}", "", 0, 1, 1, now, now, nil,
+		))
+
+	slColumns := []string{"id", "token", "resource_type", "resource_id", "created_by", "expire_at", "status", "created_at"}
+	// Existing link that needs to be deleted first
+	mock.ExpectQuery("SELECT \\* FROM share_links WHERE resource_type = \\? AND resource_id = \\? AND status = 1").
+		WithArgs("dashboard", 1).
+		WillReturnRows(sqlmock.NewRows(slColumns).AddRow(
+			99, "old", "dashboard", 1, 1, nil, 1, now,
+		))
+	mock.ExpectExec("UPDATE share_links SET status = 0 WHERE id = \\?").
+		WithArgs(99).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("INSERT INTO share_links").
+		WillReturnResult(sqlmock.NewResult(100, 1))
+
+	token, err := svc.EnableShare(context.Background(), 1, 1, "secret", 24)
+	require.NoError(t, err)
+	assert.NotEmpty(t, token)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestDashboardService_DisableShare_NotOwner(t *testing.T) {
+	db, mock := testutil.NewMockDB(t)
+	repo := repository.NewDashboardRepository(db)
+	shareLinkRepo := repository.NewShareLinkRepository(db)
+	svc := NewDashboardService(repo, shareLinkRepo)
+
+	dbColumns := []string{"id", "title", "type", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	now := time.Now()
+	mock.ExpectQuery("SELECT \\* FROM dashboards WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(dbColumns).AddRow(
+			1, "Test", "dashboard", "{}", "", 0, 1, 99, now, now, nil,
+		))
+
+	err := svc.DisableShare(context.Background(), 1, 7)
+	assert.ErrorIs(t, err, ErrNotOwner)
+}
+
 func TestDashboardService_RemoveChart(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewDashboardRepository(db)

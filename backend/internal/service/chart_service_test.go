@@ -62,6 +62,63 @@ func TestChartService_Create(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestChartService_Create_EmptyConfigDefaultsToBraces(t *testing.T) {
+	db, mock := testutil.NewMockDB(t)
+	repo := repository.NewChartRepository(db)
+	datasetRepo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	svc := NewChartService(repo, datasetRepo, dsRepo, nil, nil)
+
+	mock.ExpectExec("INSERT INTO charts").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	result, err := svc.Create(context.Background(), &dto.CreateChartRequest{
+		Title:     "No Config",
+		Type:      "line",
+		DatasetID: 1,
+		// Config intentionally empty
+	}, 1)
+	require.NoError(t, err)
+	assert.Equal(t, "{}", result.Config)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestChartService_Create_InvalidJSON(t *testing.T) {
+	db, _ := testutil.NewMockDB(t)
+	repo := repository.NewChartRepository(db)
+	datasetRepo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	svc := NewChartService(repo, datasetRepo, dsRepo, nil, nil)
+
+	_, err := svc.Create(context.Background(), &dto.CreateChartRequest{
+		Title:     "Bad",
+		Type:      "bar",
+		DatasetID: 1,
+		Config:    `not-json`,
+	}, 1)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid config json")
+}
+
+func TestChartService_Create_DBError(t *testing.T) {
+	db, mock := testutil.NewMockDB(t)
+	repo := repository.NewChartRepository(db)
+	datasetRepo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	svc := NewChartService(repo, datasetRepo, dsRepo, nil, nil)
+
+	mock.ExpectExec("INSERT INTO charts").
+		WillReturnError(sql.ErrConnDone)
+
+	_, err := svc.Create(context.Background(), &dto.CreateChartRequest{
+		Title:     "X",
+		Type:      "bar",
+		DatasetID: 1,
+		Config:    "{}",
+	}, 1)
+	assert.Error(t, err)
+}
+
 func TestChartService_GetByID(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewChartRepository(db)

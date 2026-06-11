@@ -153,3 +153,54 @@ func TestDatasourceService_TestConnection_UnsupportedType(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported")
 }
+
+func TestDatasourceService_Create_InvalidJSON(t *testing.T) {
+	db, _ := testutil.NewMockDB(t)
+	repo := repository.NewDatasourceRepository(db)
+	svc := NewDatasourceService(repo, nil)
+
+	_, err := svc.Create(context.Background(), &dto.CreateDatasourceRequest{
+		Name:   "Bad Datasource",
+		Type:   "mysql",
+		Config: `not-json`,
+	}, 1)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid config json")
+}
+
+func TestDatasourceService_Create_FileType(t *testing.T) {
+	db, mock := testutil.NewMockDB(t)
+	repo := repository.NewDatasourceRepository(db)
+	svc := NewDatasourceService(repo, nil)
+
+	mock.ExpectExec("INSERT INTO datasources").
+		WillReturnResult(sqlmock.NewResult(2, 1))
+
+	result, err := svc.Create(context.Background(), &dto.CreateDatasourceRequest{
+		Name:   "Sales CSV",
+		Type:   "csv",
+		Config: `{"file_path":"/data/sales.csv","file_type":"csv"}`,
+	}, 7)
+	require.NoError(t, err)
+	assert.Equal(t, "Sales CSV", result.Name)
+	assert.Equal(t, "csv", result.Type)
+	assert.Equal(t, "/data/sales.csv", result.FilePath)
+	assert.Equal(t, "csv", result.FileType)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestDatasourceService_Create_DBError(t *testing.T) {
+	db, mock := testutil.NewMockDB(t)
+	repo := repository.NewDatasourceRepository(db)
+	svc := NewDatasourceService(repo, nil)
+
+	mock.ExpectExec("INSERT INTO datasources").
+		WillReturnError(sql.ErrConnDone)
+
+	_, err := svc.Create(context.Background(), &dto.CreateDatasourceRequest{
+		Name:   "X",
+		Type:   "mysql",
+		Config: `{}`,
+	}, 1)
+	assert.Error(t, err)
+}
