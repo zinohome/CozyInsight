@@ -171,3 +171,123 @@ func TestWorkbenchHandler_GetFavorites(t *testing.T) {
 	data := resp["data"].([]interface{})
 	assert.Len(t, data, 1)
 }
+
+func TestWorkbenchHandler_GetStats_DBError(t *testing.T) {
+	r, mock := setupWorkbenchHandler(t)
+
+	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM datasources").
+		WithArgs(1).
+		WillReturnError(assert.AnError)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/workbench/stats", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestWorkbenchHandler_GetRecentViews_DBError(t *testing.T) {
+	r, mock := setupWorkbenchHandler(t)
+
+	mock.ExpectQuery("SELECT d.id, d.title, d.type, rv.visited_at").
+		WithArgs(1, 20).
+		WillReturnError(assert.AnError)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/workbench/recent", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestWorkbenchHandler_RecordVisit_InvalidBody(t *testing.T) {
+	r, _ := setupWorkbenchHandler(t)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/workbench/recent", bytes.NewReader([]byte("not-json")))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestWorkbenchHandler_RecordVisit_DBError(t *testing.T) {
+	r, mock := setupWorkbenchHandler(t)
+
+	mock.ExpectExec("INSERT INTO recent_views").
+		WithArgs(1, "dashboard", uint64(5)).
+		WillReturnError(assert.AnError)
+
+	body, _ := json.Marshal(dto.RecordVisitRequest{ResourceType: "dashboard", ResourceID: 5})
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/workbench/recent", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestWorkbenchHandler_GetFavorites_DBError(t *testing.T) {
+	r, mock := setupWorkbenchHandler(t)
+
+	mock.ExpectQuery("SELECT d.id, d.title, d.type, f.created_at").
+		WithArgs(1).
+		WillReturnError(assert.AnError)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/workbench/favorites", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestWorkbenchHandler_AddFavorite_InvalidBody(t *testing.T) {
+	r, _ := setupWorkbenchHandler(t)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/workbench/favorites", bytes.NewReader([]byte("not-json")))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestWorkbenchHandler_AddFavorite_DBError(t *testing.T) {
+	r, mock := setupWorkbenchHandler(t)
+
+	mock.ExpectExec("INSERT INTO favorites").
+		WithArgs(1, "dashboard", uint64(10)).
+		WillReturnError(assert.AnError)
+
+	body, _ := json.Marshal(dto.AddFavoriteRequest{ResourceType: "dashboard", ResourceID: 10})
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/workbench/favorites", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestWorkbenchHandler_DeleteFavorite_InvalidID(t *testing.T) {
+	r, _ := setupWorkbenchHandler(t)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("DELETE", "/workbench/favorites/dashboard/abc", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestWorkbenchHandler_DeleteFavorite_DBError(t *testing.T) {
+	r, mock := setupWorkbenchHandler(t)
+
+	mock.ExpectExec("DELETE FROM favorites").
+		WithArgs(1, "screen", uint64(3)).
+		WillReturnError(assert.AnError)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("DELETE", "/workbench/favorites/screen/3", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -29,7 +30,12 @@ func setupShareHandler(t *testing.T) (*gin.Engine, sqlmock.Sqlmock) {
 	h := NewShareHandler(svc)
 
 	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("userID", uint64(1))
+		c.Next()
+	})
 	r.GET("/share/:token", h.GetDashboard)
+	r.GET("/share", h.List)
 	return r, mock
 }
 
@@ -71,4 +77,36 @@ func TestShareHandler_GetDashboard_NotFound(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestShareHandler_List(t *testing.T) {
+	r, mock := setupShareHandler(t)
+
+	cols := []string{"id", "token", "resource_type", "resource_id", "created_by", "expire_at", "password", "status", "created_at"}
+	now := time.Now()
+	mock.ExpectQuery("SELECT \\* FROM share_links WHERE created_by = \\? AND status = 1 ORDER BY created_at DESC").
+		WithArgs(uint64(1)).
+		WillReturnRows(sqlmock.NewRows(cols).AddRow(1, "abc", "dashboard", 1, 1, nil, "", 1, now))
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/share", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestShareHandler_List_DBError(t *testing.T) {
+	r, mock := setupShareHandler(t)
+
+	mock.ExpectQuery("SELECT \\* FROM share_links WHERE created_by = \\? AND status = 1 ORDER BY created_at DESC").
+		WithArgs(uint64(1)).
+		WillReturnError(sql.ErrConnDone)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/share", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
 }

@@ -28,7 +28,8 @@ func setupDashboardHandler(t *testing.T) (*gin.Engine, sqlmock.Sqlmock) {
 
 	sqlxDB := sqlx.NewDb(db, "mysql")
 	repo := repository.NewDashboardRepository(sqlxDB)
-	svc := service.NewDashboardService(repo, nil)
+	shareLinkRepo := repository.NewShareLinkRepository(sqlxDB)
+	svc := service.NewDashboardService(repo, shareLinkRepo)
 	h := NewDashboardHandler(svc)
 
 	r := gin.New()
@@ -327,4 +328,130 @@ func TestDashboardHandler_AddChart_InvalidBody(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestDashboardHandler_EnableShare(t *testing.T) {
+	r, mock := setupDashboardHandler(t)
+
+	cols := []string{"id", "title", "type", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	now := time.Now()
+	mock.ExpectQuery("SELECT \\* FROM dashboards WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(cols).AddRow(1, "Sales", "dashboard", "{}", "", 0, 1, 1, now, now, nil))
+
+	// ListByResource returns no existing share links.
+	mock.ExpectQuery("SELECT \\* FROM share_links WHERE resource_type = \\? AND resource_id = \\? AND status = 1").
+		WithArgs("dashboard", uint64(1)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "token", "resource_type", "resource_id", "created_by", "expire_at", "password", "status", "created_at"}))
+
+	// Create new share link.
+	mock.ExpectExec("INSERT INTO share_links").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	body, _ := json.Marshal(map[string]interface{}{"password": "p", "expireHours": 24})
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/dashboard/1/share", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestDashboardHandler_EnableShare_InvalidID(t *testing.T) {
+	r, _ := setupDashboardHandler(t)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/dashboard/abc/share", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestDashboardHandler_EnableShare_NotOwner(t *testing.T) {
+	r, mock := setupDashboardHandler(t)
+
+	cols := []string{"id", "title", "type", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	now := time.Now()
+	// CreatedBy=2, but middleware sets userID=1 — service should return ErrNotOwner.
+	mock.ExpectQuery("SELECT \\* FROM dashboards WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(cols).AddRow(1, "Sales", "dashboard", "{}", "", 0, 1, 2, now, now, nil))
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/dashboard/1/share", bytes.NewReader([]byte("{}")))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestDashboardHandler_EnableShare_NotFound(t *testing.T) {
+	r, mock := setupDashboardHandler(t)
+
+	mock.ExpectQuery("SELECT \\* FROM dashboards WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(99).
+		WillReturnError(sql.ErrNoRows)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/dashboard/99/share", bytes.NewReader([]byte("{}")))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestDashboardHandler_DisableShare(t *testing.T) {
+	r, mock := setupDashboardHandler(t)
+
+	cols := []string{"id", "title", "type", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	now := time.Now()
+	mock.ExpectQuery("SELECT \\* FROM dashboards WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(cols).AddRow(1, "Sales", "dashboard", "{}", "", 0, 1, 1, now, now, nil))
+
+	shareCols := []string{"id", "token", "resource_type", "resource_id", "created_by", "expire_at", "password", "status", "created_at"}
+	mock.ExpectQuery("SELECT \\* FROM share_links WHERE resource_type = \\? AND resource_id = \\? AND status = 1").
+		WithArgs("dashboard", uint64(1)).
+		WillReturnRows(sqlmock.NewRows(shareCols).AddRow(1, "abc", "dashboard", 1, 1, nil, "", 1, now))
+
+	mock.ExpectExec("UPDATE share_links SET status = 0 WHERE id = \\?").
+		WithArgs(1).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("DELETE", "/dashboard/1/share", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestDashboardHandler_DisableShare_InvalidID(t *testing.T) {
+	r, _ := setupDashboardHandler(t)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("DELETE", "/dashboard/abc/share", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestDashboardHandler_DisableShare_NotOwner(t *testing.T) {
+	r, mock := setupDashboardHandler(t)
+
+	cols := []string{"id", "title", "type", "config", "share_token", "share_enabled", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	now := time.Now()
+	mock.ExpectQuery("SELECT \\* FROM dashboards WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(cols).AddRow(1, "Sales", "dashboard", "{}", "", 0, 1, 2, now, now, nil))
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("DELETE", "/dashboard/1/share", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
 }

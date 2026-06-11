@@ -38,6 +38,7 @@ func setupDatasourceHandler(t *testing.T) (*gin.Engine, sqlmock.Sqlmock) {
 	r.GET("/datasource/:id", h.Get)
 	r.PUT("/datasource/:id", h.Update)
 	r.DELETE("/datasource/:id", h.Delete)
+	r.POST("/datasource/test", h.TestConnection)
 	r.POST("/datasource/upload", func(c *gin.Context) {
 		c.Set("userID", uint64(1))
 		h.UploadFile(c)
@@ -291,4 +292,48 @@ func buildMultipartForm(t *testing.T, filename string, content []byte) (*bytes.B
 	require.NoError(t, err)
 	require.NoError(t, writer.Close())
 	return &b, writer.FormDataContentType()
+}
+
+func TestDatasourceHandler_TestConnection_UnsupportedType(t *testing.T) {
+	r, _ := setupDatasourceHandler(t)
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"type":   "unknown",
+		"config": map[string]interface{}{"host": "x"},
+	})
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/datasource/test", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestDatasourceHandler_TestConnection_MySQL_Fails(t *testing.T) {
+	r, _ := setupDatasourceHandler(t)
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"type": "mysql",
+		"config": map[string]interface{}{
+			"host": "127.0.0.1", "port": float64(1),
+			"username": "u", "password": "p", "database": "d",
+		},
+	})
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/datasource/test", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestDatasourceHandler_TestConnection_InvalidBody(t *testing.T) {
+	r, _ := setupDatasourceHandler(t)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/datasource/test", bytes.NewReader([]byte("not-json")))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
