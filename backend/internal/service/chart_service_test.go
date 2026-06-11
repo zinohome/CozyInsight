@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"testing"
 	"time"
 
@@ -414,4 +415,246 @@ func TestChartService_GetData_RuntimeParamsBypassCache(t *testing.T) {
 	assert.Equal(t, "US", resp.Data[0]["region"])
 	assert.Equal(t, int64(42), resp.Data[0]["sum_amount"])
 	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestChartService_GetData_CacheHit(t *testing.T) {
+	db, mock := testutil.NewMockDB(t)
+	chartRepo := repository.NewChartRepository(db)
+	datasetRepo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	pool := engine.NewConnectorPool()
+	mockConn := &mockChartConnector{}
+	pool.Register(1, mockConn)
+
+	mr := miniredis.RunT(t)
+	redisClient := cache.NewRedisClient(mr.Addr())
+	cacheSvc := NewCacheService(redisClient)
+
+	svc := NewChartService(chartRepo, datasetRepo, dsRepo, cacheSvc, pool)
+
+	chartConfig := `{"dimensions":[{"field":"month"}],"metrics":[{"field":"amount","aggregation":"SUM"}]}`
+	cachedResp := &dto.ChartDataResponse{
+		Dimensions: []string{"month"},
+		Metrics:    []string{"sum_amount"},
+		Data:       []map[string]interface{}{{`month`: "Jan", "sum_amount": int64(999)}},
+	}
+	err := cacheSvc.SetChartData(context.Background(), 1, chartConfig, cachedResp, time.Minute)
+	require.NoError(t, err)
+
+	// On cache hit the chart row is loaded for the cache key, but dataset / datasource /
+	// connector must NOT be touched.
+	chartCols := []string{"id", "title", "type", "dataset_id", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	now := time.Now()
+	mock.ExpectQuery("SELECT \\* FROM charts WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(chartCols).AddRow(
+			1, "Sales", "bar", 1, chartConfig, 1, 1, now, now, nil,
+		))
+
+	resp, err := svc.GetData(context.Background(), 1, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, float64(999), resp.Data[0]["sum_amount"], "JSON round-trip deserializes ints as float64")
+	assert.False(t, mockConn.queryCalled, "connector must NOT be called on cache hit")
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestChartService_GetData_ChartNotFound(t *testing.T) {
+	db, mock := testutil.NewMockDB(t)
+	chartRepo := repository.NewChartRepository(db)
+	datasetRepo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	svc := NewChartService(chartRepo, datasetRepo, dsRepo, nil, nil)
+
+	mock.ExpectQuery("SELECT \\* FROM charts WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(99).
+		WillReturnError(sql.ErrNoRows)
+
+	_, err := svc.GetData(context.Background(), 99, nil, nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "chart not found")
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestChartService_GetData_InvalidConfigJSON(t *testing.T) {
+	db, mock := testutil.NewMockDB(t)
+	chartRepo := repository.NewChartRepository(db)
+	datasetRepo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	svc := NewChartService(chartRepo, datasetRepo, dsRepo, nil, nil)
+
+	chartCols := []string{"id", "title", "type", "dataset_id", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	now := time.Now()
+	mock.ExpectQuery("SELECT \\* FROM charts WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(chartCols).AddRow(
+			1, "Bad", "bar", 1, "{not-json", 1, 1, now, now, nil,
+		))
+
+	_, err := svc.GetData(context.Background(), 1, nil, nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid chart config")
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestChartService_GetData_DatasetNotFound(t *testing.T) {
+	db, mock := testutil.NewMockDB(t)
+	chartRepo := repository.NewChartRepository(db)
+	datasetRepo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	pool := engine.NewConnectorPool()
+	pool.Register(1, &mockChartConnector{})
+	svc := NewChartService(chartRepo, datasetRepo, dsRepo, nil, pool)
+
+	chartCols := []string{"id", "title", "type", "dataset_id", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	now := time.Now()
+	mock.ExpectQuery("SELECT \\* FROM charts WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(chartCols).AddRow(
+			1, "Sales", "bar", 1,
+			`{"dimensions":[{"field":"month"}],"metrics":[{"field":"amount","aggregation":"SUM"}]}`,
+			1, 1, now, now, nil,
+		))
+
+	mock.ExpectQuery("SELECT \\* FROM datasets WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnError(sql.ErrNoRows)
+
+	_, err := svc.GetData(context.Background(), 1, nil, nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "dataset not found")
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestChartService_GetData_DatasourceNotFound(t *testing.T) {
+	db, mock := testutil.NewMockDB(t)
+	chartRepo := repository.NewChartRepository(db)
+	datasetRepo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	pool := engine.NewConnectorPool()
+	pool.Register(1, &mockChartConnector{})
+	svc := NewChartService(chartRepo, datasetRepo, dsRepo, nil, pool)
+
+	chartCols := []string{"id", "title", "type", "dataset_id", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	now := time.Now()
+	mock.ExpectQuery("SELECT \\* FROM charts WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(chartCols).AddRow(
+			1, "Sales", "bar", 1,
+			`{"dimensions":[{"field":"month"}],"metrics":[{"field":"amount","aggregation":"SUM"}]}`,
+			1, 1, now, now, nil,
+		))
+
+	dsCols := []string{"id", "name", "datasource_id", "database_name", "table_name", "type", "mode", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	mock.ExpectQuery("SELECT \\* FROM datasets WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(dsCols).AddRow(
+			1, "Sales DS", 1, "db", "sales", "table", 0, 1, 1, now, now, nil,
+		))
+
+	mock.ExpectQuery("SELECT \\* FROM datasources WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnError(sql.ErrNoRows)
+
+	_, err := svc.GetData(context.Background(), 1, nil, nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "datasource not found")
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestChartService_GetData_QueryError(t *testing.T) {
+	db, mock := testutil.NewMockDB(t)
+	chartRepo := repository.NewChartRepository(db)
+	datasetRepo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	pool := engine.NewConnectorPool()
+	failingConn := &failingQueryConnector{err: fmt.Errorf("kaboom")}
+	pool.Register(1, failingConn)
+	svc := NewChartService(chartRepo, datasetRepo, dsRepo, nil, pool)
+
+	chartCols := []string{"id", "title", "type", "dataset_id", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	now := time.Now()
+	mock.ExpectQuery("SELECT \\* FROM charts WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(chartCols).AddRow(
+			1, "Sales", "bar", 1,
+			`{"dimensions":[{"field":"month"}],"metrics":[{"field":"amount","aggregation":"SUM"}]}`,
+			1, 1, now, now, nil,
+		))
+
+	dsCols := []string{"id", "name", "datasource_id", "database_name", "table_name", "type", "mode", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	mock.ExpectQuery("SELECT \\* FROM datasets WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(dsCols).AddRow(
+			1, "Sales DS", 1, "db", "sales", "table", 0, 1, 1, now, now, nil,
+		))
+
+	datasourceCols := []string{"id", "name", "type", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	mock.ExpectQuery("SELECT \\* FROM datasources WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(datasourceCols).AddRow(
+			1, "Local MySQL", "mysql", `{"host":"h","port":3306,"username":"u","password":"p","database":"db"}`, 1, 1, now, now, nil,
+		))
+
+	_, err := svc.GetData(context.Background(), 1, nil, nil)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "query failed")
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestChartService_GetData_DrillDimension_OverwritesConfig(t *testing.T) {
+	db, mock := testutil.NewMockDB(t)
+	chartRepo := repository.NewChartRepository(db)
+	datasetRepo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	pool := engine.NewConnectorPool()
+	mockConn := &mockChartConnector{
+		returnData: []map[string]interface{}{{"day": "Mon", "sum_amount": int64(1)}},
+	}
+	pool.Register(1, mockConn)
+	svc := NewChartService(chartRepo, datasetRepo, dsRepo, nil, pool)
+
+	chartCols := []string{"id", "title", "type", "dataset_id", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	now := time.Now()
+	mock.ExpectQuery("SELECT \\* FROM charts WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(chartCols).AddRow(
+			1, "Sales", "bar", 1,
+			`{"dimensions":[{"field":"month"}],"metrics":[{"field":"amount","aggregation":"SUM"}]}`,
+			1, 1, now, now, nil,
+		))
+
+	dsCols := []string{"id", "name", "datasource_id", "database_name", "table_name", "type", "mode", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	mock.ExpectQuery("SELECT \\* FROM datasets WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(dsCols).AddRow(
+			1, "Sales DS", 1, "db", "sales", "table", 0, 1, 1, now, now, nil,
+		))
+
+	datasourceCols := []string{"id", "name", "type", "config", "status", "created_by", "created_at", "updated_at", "deleted_at"}
+	mock.ExpectQuery("SELECT \\* FROM datasources WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows(datasourceCols).AddRow(
+			1, "Local MySQL", "mysql", `{"host":"h","port":3306,"username":"u","password":"p","database":"db"}`, 1, 1, now, now, nil,
+		))
+
+	drill := "day"
+	resp, err := svc.GetData(context.Background(), 1, nil, &drill)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"day"}, resp.Dimensions, "drill dimension must replace configured dimensions")
+	assert.Contains(t, mockConn.querySQL, "`day`")
+	assert.NotContains(t, mockConn.querySQL, "`month`")
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+type failingQueryConnector struct {
+	err error
+}
+
+func (m *failingQueryConnector) Connect(string) error { return nil }
+func (m *failingQueryConnector) Close() error         { return nil }
+func (m *failingQueryConnector) Query(ctx context.Context, query string, args ...interface{}) ([]map[string]interface{}, error) {
+	return nil, m.err
+}
+func (m *failingQueryConnector) GetColumns(context.Context, string, string) ([]engine.ColumnInfo, error) {
+	return nil, nil
 }

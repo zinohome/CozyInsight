@@ -21,11 +21,16 @@ import (
 type mockConnector struct {
 	columns []engine.ColumnInfo
 	data    []map[string]interface{}
+	// dataFn lets a test return different data on successive Query calls.
+	dataFn func() []map[string]interface{}
 }
 
 func (m *mockConnector) Connect(configJSON string) error { return nil }
 func (m *mockConnector) Close() error                  { return nil }
 func (m *mockConnector) Query(ctx context.Context, query string, args ...interface{}) ([]map[string]interface{}, error) {
+	if m.dataFn != nil {
+		return m.dataFn(), nil
+	}
 	return m.data, nil
 }
 func (m *mockConnector) GetColumns(ctx context.Context, dbName, tableName string) ([]engine.ColumnInfo, error) {
@@ -485,5 +490,175 @@ func TestDatasetService_PreviewData_DatasetNotFound(t *testing.T) {
 		WillReturnError(sql.ErrNoRows)
 
 	_, err := svc.PreviewData(context.Background(), 99, 10)
+	assert.Error(t, err)
+}
+
+func TestDatasetService_getSQLColumns_Happy(t *testing.T) {
+	db, _ := testutil.NewMockDB(t)
+	repo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	svc := NewDatasetService(repo, dsRepo, nil, nil)
+
+	// First query (LIMIT 0) returns one row of metadata so we don't go down the
+	// fallback LIMIT 1 branch.
+	mockConn := &mockConnector{data: []map[string]interface{}{
+		{"id": 1, "name": "Alice"},
+	}}
+	svc.newConnector = func(string) (engine.DatasourceConnector, error) { return mockConn, nil }
+
+	cols, err := svc.getSQLColumns(context.Background(), &model.Datasource{Type: "mysql", Config: "{}"}, "SELECT * FROM t")
+	require.NoError(t, err)
+	assert.Len(t, cols, 2)
+	// Both keys should be present; order is map-randomized
+	names := []string{cols[0].Name, cols[1].Name}
+	assert.Contains(t, names, "id")
+	assert.Contains(t, names, "name")
+}
+
+func TestDatasetService_getSQLColumns_FallbackLimit1(t *testing.T) {
+	db, _ := testutil.NewMockDB(t)
+	repo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	svc := NewDatasetService(repo, dsRepo, nil, nil)
+
+	// First query returns 0 rows, second (LIMIT 1) returns 1 row
+	calls := 0
+	mockConn := &mockConnector{
+		dataFn: func() []map[string]interface{} {
+			calls++
+			if calls == 1 {
+				return nil
+			}
+			return []map[string]interface{}{{"col": 1}}
+		},
+	}
+	svc.newConnector = func(string) (engine.DatasourceConnector, error) { return mockConn, nil }
+
+	cols, err := svc.getSQLColumns(context.Background(), &model.Datasource{Type: "mysql", Config: "{}"}, "SELECT * FROM t")
+	require.NoError(t, err)
+	assert.Len(t, cols, 1)
+	assert.Equal(t, "col", cols[0].Name)
+}
+
+func TestDatasetService_getSQLColumns_NoColumns(t *testing.T) {
+	db, _ := testutil.NewMockDB(t)
+	repo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	svc := NewDatasetService(repo, dsRepo, nil, nil)
+
+	mockConn := &mockConnector{data: nil} // both queries return nil
+	svc.newConnector = func(string) (engine.DatasourceConnector, error) { return mockConn, nil }
+
+	_, err := svc.getSQLColumns(context.Background(), &model.Datasource{Type: "mysql", Config: "{}"}, "SELECT * FROM empty")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "sql returned no columns")
+}
+
+func TestDatasetService_getSQLColumns_ConnectorError(t *testing.T) {
+	db, _ := testutil.NewMockDB(t)
+	repo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	svc := NewDatasetService(repo, dsRepo, nil, nil)
+
+	svc.newConnector = func(string) (engine.DatasourceConnector, error) {
+		return nil, fmt.Errorf("nope")
+	}
+
+	_, err := svc.getSQLColumns(context.Background(), &model.Datasource{Type: "mysql", Config: "{}"}, "SELECT 1")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "get connector failed")
+}
+
+func TestDatasetService_queryTableDataWithFilter_WithFilter(t *testing.T) {
+	db, _ := testutil.NewMockDB(t)
+	repo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	svc := NewDatasetService(repo, dsRepo, nil, nil)
+
+	mockConn := &mockConnector{data: []map[string]interface{}{{"id": 1}}}
+	svc.newConnector = func(string) (engine.DatasourceConnector, error) { return mockConn, nil }
+
+	filter := []RowFilterCondition{
+		{FieldName: "dept_id", Operator: "=", Value: "5"},
+	}
+	data, err := svc.queryTableDataWithFilter(
+		context.Background(),
+		&model.Datasource{Type: "mysql", Config: "{}"},
+		"db", "users", 10, filter,
+	)
+	require.NoError(t, err)
+	assert.Len(t, data, 1)
+}
+
+func TestDatasetService_queryTableDataWithFilter_NoDbName(t *testing.T) {
+	db, _ := testutil.NewMockDB(t)
+	repo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	svc := NewDatasetService(repo, dsRepo, nil, nil)
+
+	mockConn := &mockConnector{data: []map[string]interface{}{{"x": 1}}}
+	svc.newConnector = func(string) (engine.DatasourceConnector, error) { return mockConn, nil }
+
+	// No filter, no dbName → tableRef = just "users"
+	data, err := svc.queryTableDataWithFilter(
+		context.Background(),
+		&model.Datasource{Type: "mysql", Config: "{}"},
+		"", "users", 5, nil,
+	)
+	require.NoError(t, err)
+	assert.Len(t, data, 1)
+}
+
+func TestDatasetService_queryTableDataWithFilter_ConnectorError(t *testing.T) {
+	db, _ := testutil.NewMockDB(t)
+	repo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	svc := NewDatasetService(repo, dsRepo, nil, nil)
+
+	svc.newConnector = func(string) (engine.DatasourceConnector, error) {
+		return nil, fmt.Errorf("boom")
+	}
+
+	_, err := svc.queryTableDataWithFilter(
+		context.Background(),
+		&model.Datasource{Type: "mysql", Config: "{}"},
+		"db", "users", 10, nil,
+	)
+	assert.Error(t, err)
+}
+
+func TestDatasetService_querySQLData(t *testing.T) {
+	db, _ := testutil.NewMockDB(t)
+	repo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	svc := NewDatasetService(repo, dsRepo, nil, nil)
+
+	mockConn := &mockConnector{data: []map[string]interface{}{{"a": 1}, {"a": 2}}}
+	svc.newConnector = func(string) (engine.DatasourceConnector, error) { return mockConn, nil }
+
+	data, err := svc.querySQLData(
+		context.Background(),
+		&model.Datasource{Type: "mysql", Config: "{}"},
+		"SELECT a FROM t", 10,
+	)
+	require.NoError(t, err)
+	assert.Len(t, data, 2)
+}
+
+func TestDatasetService_querySQLData_ConnectorError(t *testing.T) {
+	db, _ := testutil.NewMockDB(t)
+	repo := repository.NewDatasetRepository(db)
+	dsRepo := repository.NewDatasourceRepository(db)
+	svc := NewDatasetService(repo, dsRepo, nil, nil)
+
+	svc.newConnector = func(string) (engine.DatasourceConnector, error) {
+		return nil, fmt.Errorf("bad")
+	}
+
+	_, err := svc.querySQLData(
+		context.Background(),
+		&model.Datasource{Type: "mysql", Config: "{}"},
+		"SELECT 1", 10,
+	)
 	assert.Error(t, err)
 }

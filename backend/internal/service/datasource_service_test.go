@@ -204,3 +204,135 @@ func TestDatasourceService_Create_DBError(t *testing.T) {
 	}, 1)
 	assert.Error(t, err)
 }
+
+func TestDatasourceService_TestConnection_MySQL_PingFails(t *testing.T) {
+	db, _ := testutil.NewMockDB(t)
+	repo := repository.NewDatasourceRepository(db)
+	svc := NewDatasourceService(repo, nil)
+
+	// 127.0.0.1:1 is reserved (tcpmux) and universally refuses connections, so
+	// sql.Open succeeds but PingContext returns an error.
+	err := svc.TestConnection(context.Background(), &dto.TestConnectionRequest{
+		Type: "mysql",
+		Config: map[string]interface{}{
+			"host":     "127.0.0.1",
+			"port":     float64(1),
+			"username": "u",
+			"password": "p",
+			"database": "d",
+		},
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "ping failed")
+}
+
+func TestDatasourceService_TestConnection_Postgres_OpenFails(t *testing.T) {
+	// postgresql driver is registered as "postgres" in database/sql; the
+	// service's "postgresql" branch passes req.Type through unchanged, so
+	// sql.Open must reject the unknown driver.
+	db, _ := testutil.NewMockDB(t)
+	repo := repository.NewDatasourceRepository(db)
+	svc := NewDatasourceService(repo, nil)
+
+	err := svc.TestConnection(context.Background(), &dto.TestConnectionRequest{
+		Type: "postgresql",
+		Config: map[string]interface{}{
+			"host":     "127.0.0.1",
+			"port":     float64(1),
+			"username": "u",
+			"password": "p",
+			"database": "d",
+		},
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "open connection failed")
+}
+
+func TestDatasourceService_TestConnection_ClickHouse_PingFails(t *testing.T) {
+	db, _ := testutil.NewMockDB(t)
+	repo := repository.NewDatasourceRepository(db)
+	svc := NewDatasourceService(repo, nil)
+
+	err := svc.TestConnection(context.Background(), &dto.TestConnectionRequest{
+		Type: "clickhouse",
+		Config: map[string]interface{}{
+			"host":     "127.0.0.1",
+			"port":     float64(1),
+			"username": "u",
+			"password": "p",
+			"database": "d",
+		},
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "ping failed")
+}
+
+func TestDatasourceService_TestConnection_SQLite_PingFails(t *testing.T) {
+	// Point sqlite at a directory that cannot be opened as a database file.
+	// sql.Open succeeds (lazy), but the first query/ping errors out.
+	db, _ := testutil.NewMockDB(t)
+	repo := repository.NewDatasourceRepository(db)
+	svc := NewDatasourceService(repo, nil)
+
+	err := svc.TestConnection(context.Background(), &dto.TestConnectionRequest{
+		Type: "sqlite",
+		Config: map[string]interface{}{
+			"database": "/nonexistent/dir/that/should/not/exist/db.sqlite",
+		},
+	})
+	assert.Error(t, err)
+}
+
+func TestDatasourceService_TestConnection_Excel_MissingFilePath(t *testing.T) {
+	db, _ := testutil.NewMockDB(t)
+	repo := repository.NewDatasourceRepository(db)
+	svc := NewDatasourceService(repo, nil)
+
+	err := svc.TestConnection(context.Background(), &dto.TestConnectionRequest{
+		Type:   "excel",
+		Config: map[string]interface{}{},
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "missing file_path")
+}
+
+func TestDatasourceService_TestConnection_CSV_MissingFilePath(t *testing.T) {
+	db, _ := testutil.NewMockDB(t)
+	repo := repository.NewDatasourceRepository(db)
+	svc := NewDatasourceService(repo, nil)
+
+	err := svc.TestConnection(context.Background(), &dto.TestConnectionRequest{
+		Type:   "csv",
+		Config: map[string]interface{}{},
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "missing file_path")
+}
+
+func TestDatasourceService_Delete_NotFound(t *testing.T) {
+	db, mock := testutil.NewMockDB(t)
+	repo := repository.NewDatasourceRepository(db)
+	svc := NewDatasourceService(repo, nil)
+
+	mock.ExpectQuery("SELECT \\* FROM datasources WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(99).
+		WillReturnError(sql.ErrNoRows)
+
+	err := svc.Delete(context.Background(), 99)
+	assert.Error(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestDatasourceService_Update_NotFound(t *testing.T) {
+	db, mock := testutil.NewMockDB(t)
+	repo := repository.NewDatasourceRepository(db)
+	svc := NewDatasourceService(repo, nil)
+
+	mock.ExpectQuery("SELECT \\* FROM datasources WHERE id = \\? AND deleted_at IS NULL").
+		WithArgs(99).
+		WillReturnError(sql.ErrNoRows)
+
+	err := svc.Update(context.Background(), 99, &dto.UpdateDatasourceRequest{Name: "x"})
+	assert.Error(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}

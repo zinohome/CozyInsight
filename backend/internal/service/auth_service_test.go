@@ -61,6 +61,31 @@ func TestAuthService_Register_Duplicate(t *testing.T) {
 	assert.Contains(t, err.Error(), "already exists")
 }
 
+func TestAuthService_Register_CreateError(t *testing.T) {
+	db, mock := testutil.NewMockDB(t)
+	repo := repository.NewUserRepository(db)
+	jwtManager := jwt.NewManager("secret", 2*time.Hour)
+	svc := NewAuthService(repo, jwtManager)
+
+	// 1. FindByUsername returns no rows
+	mock.ExpectQuery("SELECT (.+) FROM users WHERE username = (.+) AND deleted_at IS NULL").
+		WithArgs("newuser").
+		WillReturnError(sql.ErrNoRows)
+
+	// 2. Insert fails
+	mock.ExpectExec("INSERT INTO users").
+		WillReturnError(sql.ErrConnDone)
+
+	err := svc.Register(context.Background(), &dto.RegisterRequest{
+		Username: "newuser",
+		Password: "password123",
+		Email:    "n@x.com",
+		NickName: "New",
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "create user failed")
+}
+
 func TestAuthService_Login_Success(t *testing.T) {
 	db, mock := testutil.NewMockDB(t)
 	repo := repository.NewUserRepository(db)
