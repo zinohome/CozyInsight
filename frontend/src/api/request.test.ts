@@ -49,7 +49,7 @@ describe('request', () => {
     localStorage.getItem.mockReturnValue(null)
 
     vi.resetModules()
-    const request = (await import('./request')).default
+    await import('./request')
 
     const requestInterceptor = mockAxiosInstance.interceptors.request.use.mock.calls[0][0]
     const config = { headers: {} }
@@ -59,7 +59,7 @@ describe('request', () => {
 
   it('should handle successful response', async () => {
     vi.resetModules()
-    const request = (await import('./request')).default
+    await import('./request')
 
     const successInterceptor = mockAxiosInstance.interceptors.response.use.mock.calls[0][0]
     const response = { data: { code: 200, data: { id: 1 } } }
@@ -69,7 +69,7 @@ describe('request', () => {
 
   it('should reject non-200 responses', async () => {
     vi.resetModules()
-    const request = (await import('./request')).default
+    await import('./request')
 
     const successInterceptor = mockAxiosInstance.interceptors.response.use.mock.calls[0][0]
     const response = { data: { code: 500, error: 'Server Error' } }
@@ -79,7 +79,7 @@ describe('request', () => {
 
   it('should reject with default message when no error field', async () => {
     vi.resetModules()
-    const request = (await import('./request')).default
+    await import('./request')
 
     const successInterceptor = mockAxiosInstance.interceptors.response.use.mock.calls[0][0]
     const response = { data: { code: 500 } }
@@ -89,7 +89,7 @@ describe('request', () => {
 
   it('should pass through response error', async () => {
     vi.resetModules()
-    const request = (await import('./request')).default
+    await import('./request')
 
     const errorInterceptor = mockAxiosInstance.interceptors.response.use.mock.calls[0][1]
     const error = new Error('network error')

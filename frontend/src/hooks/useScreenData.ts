@@ -28,7 +28,9 @@ export function useScreenData(
 
   // Keep latest fetcher reference without recreating refetch on every render
   const getDashboardRef = useRef(getDashboard)
-  getDashboardRef.current = getDashboard
+  useEffect(() => {
+    getDashboardRef.current = getDashboard
+  }, [getDashboard])
   const chartListRef = useRef<Chart[]>([])
 
   // eslint-disable-next-line react-hooks/exhaustive-deps

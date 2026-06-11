@@ -37,7 +37,7 @@ describe('authAPI', () => {
     const mockData = { username: 'newuser', password: 'pass', email: 'a@b.com' }
     vi.mocked(request.post).mockResolvedValue(undefined)
 
-    const result = await authAPI.register(mockData)
+    await authAPI.register(mockData)
 
     expect(request.post).toHaveBeenCalledWith('/auth/register', mockData)
   })

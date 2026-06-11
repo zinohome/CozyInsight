@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Table, Button, Space, Tag, Modal, Form, Input, Select, message } from 'antd'
+import type { FormInstance } from 'antd'
 import { EditOutlined } from '@ant-design/icons'
 import { datasetAPI } from '@/api/dataset'
 import { datasourceAPI } from '@/api/datasource'
@@ -120,7 +121,7 @@ export default function DatasetPage() {
     },
   ]
 
-  const renderDatasetForm = (formInstance: any, type: 'db' | 'sql') => {
+  const renderDatasetForm = (formInstance: FormInstance, type: 'db' | 'sql') => {
     return (
       <>
         <Form.Item name="name" label="名称" rules={[{ required: true }]}>

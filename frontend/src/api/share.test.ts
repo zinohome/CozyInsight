@@ -9,7 +9,6 @@ vi.mock('./request', () => ({
   },
 }))
 
-import request from './request'
 import { shareAPI } from './share'
 
 describe('shareAPI', () => {

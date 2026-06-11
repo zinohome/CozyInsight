@@ -31,6 +31,28 @@ export default function ChartRenderer({
   error = null,
   onRetry,
 }: ChartRendererProps) {
+  // Hooks first (rules-of-hooks: don't put hooks after conditional returns).
+  const handleEvent = useCallback(
+    (_chart: unknown, event: Record<string, unknown>) => {
+      if (event.type === 'element:click' && onEvent) {
+        const record = (event.data as Record<string, unknown> | undefined)?.data as Record<string, unknown> | undefined
+        if (!record) return
+
+        const dimensionField = config.dimensions[0]
+        if (!dimensionField) return
+
+        const chartEvent: ChartEvent = {
+          type: 'element:click',
+          dimensionField,
+          dimensionValue: record[dimensionField] as string | number,
+          metrics: record,
+        }
+        onEvent(chartEvent)
+      }
+    },
+    [config.dimensions, onEvent]
+  )
+
   // 状态优先级：error > loading > empty
   if (error) {
     return <ChartError error={error} onRetry={onRetry} height={height} />
@@ -53,27 +75,6 @@ export default function ChartRenderer({
 
   const xField = dimensions[0]
   const yField = metrics[0]
-
-  const handleEvent = useCallback(
-    (_chart: unknown, event: Record<string, unknown>) => {
-      if (event.type === 'element:click' && onEvent) {
-        const record = (event.data as Record<string, unknown> | undefined)?.data as Record<string, unknown> | undefined
-        if (!record) return
-
-        const dimensionField = config.dimensions[0]
-        if (!dimensionField) return
-
-        const chartEvent: ChartEvent = {
-          type: 'element:click',
-          dimensionField,
-          dimensionValue: record[dimensionField] as string | number,
-          metrics: record,
-        }
-        onEvent(chartEvent)
-      }
-    },
-    [config.dimensions, onEvent]
-  )
 
   switch (type) {
     case 'bar':

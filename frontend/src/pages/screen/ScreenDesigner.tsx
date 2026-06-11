@@ -161,6 +161,29 @@ export default function ScreenDesigner() {
     fetchChartList()
   }, [fetchChartList])
 
+  const refreshAllData = useCallback(async () => {
+    let updated = false
+    for (const item of items) {
+      try {
+        const response = await fetchItemData(item.chartId)
+        chartDataCacheRef.current = {
+          ...chartDataCacheRef.current,
+          [item.chartId]: {
+            data: response.data,
+            dimensions: response.dimensions,
+            metrics: response.metrics,
+          },
+        }
+        updated = true
+      } catch {
+        // per-chart error shown inline
+      }
+    }
+    if (updated) {
+      setCacheVersion((v) => v + 1)
+    }
+  }, [items, fetchItemData])
+
   const handleChartEvent = useCallback((chartId: number, event: ChartEvent) => {
     const chart = chartInfoCacheRef.current[chartId]
     if (!chart) return
@@ -193,30 +216,7 @@ export default function ScreenDesigner() {
 
     applyLinkage(String(chartId), event.dimensionField, event.dimensionValue)
     refreshAllData()
-  }, [applyLinkage, applyDrill, getDrillState, navigate])
-
-  const refreshAllData = useCallback(async () => {
-    let updated = false
-    for (const item of items) {
-      try {
-        const response = await fetchItemData(item.chartId)
-        chartDataCacheRef.current = {
-          ...chartDataCacheRef.current,
-          [item.chartId]: {
-            data: response.data,
-            dimensions: response.dimensions,
-            metrics: response.metrics,
-          },
-        }
-        updated = true
-      } catch {
-        // per-chart error shown inline
-      }
-    }
-    if (updated) {
-      setCacheVersion((v) => v + 1)
-    }
-  }, [items, fetchItemData])
+  }, [applyLinkage, applyDrill, getDrillState, navigate, refreshAllData])
 
   // Load chart data and info for items
   useEffect(() => {
@@ -478,6 +478,9 @@ export default function ScreenDesigner() {
             }}
             onClick={() => setSelectedItemId(null)}
           >
+            {/* Reading ref.current in render is intentional: cacheVersion state */}
+            {/* is bumped to trigger re-render, then we look up the latest cache. */}
+            {/* eslint-disable react-hooks/refs */}
             {items.map((item) => {
               const chartInfo = chartInfoCacheRef.current[item.chartId]
               const chartData = chartDataCacheRef.current[item.chartId]
@@ -573,6 +576,7 @@ export default function ScreenDesigner() {
                 </Rnd>
               )
             })}
+            {/* eslint-enable react-hooks/refs */}
           </div>
         </div>
 
@@ -635,6 +639,7 @@ export default function ScreenDesigner() {
                 bodyStyle={{ padding: 12 }}
               >
                 <Typography.Text style={{ color: '#ccc' }}>
+                  {/* eslint-disable-next-line react-hooks/refs */}
                   {chartInfoCacheRef.current[selectedItem.chartId]?.title || `图表 #${selectedItem.chartId}`}
                 </Typography.Text>
                 <Button
