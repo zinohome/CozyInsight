@@ -66,3 +66,62 @@ func TestClickHouse_RealContainer(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, rows, 1)
 }
+
+// TestClickHouse_GetColumns_RealContainer is a follow-up that exercises
+// the GetColumns path. The clickhouse-go v2 driver occasionally returns
+// "bad connection" on DDL immediately after a fresh SELECT, so this test
+// opens a brand-new connection (no preceding Query) for the CREATE.
+//
+// Run with: go test -tags=integration -run "TestClickHouse_GetColumns" ./internal/integration/container/...
+func TestClickHouse_GetColumns_RealContainer(t *testing.T) {
+	requireDocker(t)
+	if testing.Short() {
+		t.Skip("short mode")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	ctr, err := clickhouse.RunContainer(ctx,
+		clickhouse.WithDatabase("cozy"),
+		clickhouse.WithUsername("default"),
+		clickhouse.WithPassword("test"),
+	)
+	require.NoError(t, err, "start clickhouse container")
+	defer func() { _ = ctr.Terminate(context.Background()) }()
+
+	host, err := ctr.Host(ctx)
+	require.NoError(t, err)
+	port, err := ctr.MappedPort(ctx, "9000/tcp")
+	require.NoError(t, err)
+	portInt, err := strconv.Atoi(port.Port())
+	require.NoError(t, err)
+	host = "127.0.0.1"
+
+	cfg := map[string]interface{}{
+		"host":     host,
+		"port":     portInt,
+		"username": "default",
+		"password": "test",
+		"database": "cozy",
+	}
+	cfgJSON, err := json.Marshal(cfg)
+	require.NoError(t, err)
+
+	// Open a single connection and run CREATE → GetColumns on it without
+	// any prior Query. The v2 driver fails with "bad connection" when
+	// DDL follows DQL on the same connection, so we never mix them here.
+	// We avoid CREATE altogether by querying the built-in `system.one`
+	// table — its columns are well-known and don't require DDL.
+	conn, err := engine.NewConnector("clickhouse")
+	require.NoError(t, err)
+	require.NoError(t, connectWithRetry(t, func() error { return conn.Connect(string(cfgJSON)) }, 10, 2*time.Second))
+	defer conn.Close()
+	cols, err := conn.GetColumns(ctx, "system", "one")
+	require.NoError(t, err)
+	names := make([]string, 0, len(cols))
+	for _, c := range cols {
+		names = append(names, c.Name)
+	}
+	assert.Contains(t, names, "dummy")
+}

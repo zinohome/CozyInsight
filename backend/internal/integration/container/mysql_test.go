@@ -66,4 +66,17 @@ func TestMySQL_RealContainer(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, rows, 1)
 	assert.EqualValues(t, 1, rows[0]["n"])
+
+	// Create a temp table and verify GetColumns reads INFORMATION_SCHEMA.
+	_, err = conn.Query(ctx, `CREATE TABLE IF NOT EXISTS cozy.t1 (id INT PRIMARY KEY, name VARCHAR(64), score DECIMAL(10,2))`)
+	require.NoError(t, err)
+	cols, err := conn.GetColumns(ctx, "cozy", "t1")
+	require.NoError(t, err)
+	names := make([]string, 0, len(cols))
+	for _, c := range cols {
+		names = append(names, c.Name)
+	}
+	assert.Contains(t, names, "id")
+	assert.Contains(t, names, "name")
+	assert.Contains(t, names, "score")
 }

@@ -2,6 +2,8 @@ package engine
 
 import (
 	"context"
+	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -493,4 +495,538 @@ func TestPostgreSQLConnector_BuildDSN_CustomSSLMode(t *testing.T) {
 	dsn, err := conn.buildDSN(`{"host":"localhost","port":5432,"username":"postgres","password":"secret","database":"test","sslmode":"require"}`)
 	require.NoError(t, err)
 	assert.Contains(t, dsn, "sslmode=require")
+}
+
+func TestAPIConnector_Close(t *testing.T) {
+	// Close is a no-op for the API connector and must always succeed.
+	conn, err := NewConnector("api")
+	require.NoError(t, err)
+	assert.NoError(t, conn.Close())
+
+	// Calling Close twice should still be safe.
+	assert.NoError(t, conn.Close())
+}
+
+// ---------------- 通过直接注入 sqlmock DB 覆盖 scanRows + GetColumns 真实路径 ----------------
+
+// withMockSQLiteDB 用 sqlmock 注册一个 "sqlite3" 名字的 driver，并允许测试
+// 用 mock 的 *sql.DB 替换 connector.db 字段。这样可以走真实的 scanRows +
+// GetColumns + Query 路径而不依赖真容器。
+func withMockSQLiteDB(t *testing.T) (*sql.DB, sqlmock.Sqlmock, func()) {
+	t.Helper()
+	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(false))
+	require.NoError(t, err)
+	return db, mock, func() { _ = db.Close() }
+}
+
+// TestSQLiteConnector_Query_RealScanRows 触发 scanRows 的真实路径（带类型信息）
+func TestSQLiteConnector_Query_RealScanRows(t *testing.T) {
+	c := &sqliteConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	// mock query 返回有类型的列
+	mock.ExpectQuery("SELECT").WillReturnRows(
+		sqlmock.NewRows([]string{"id", "name", "score"}).
+			AddRow(int64(1), "alice", 95.5).
+			AddRow(int64(2), "bob", 88.0),
+	)
+
+	rows, err := c.Query(context.Background(), "SELECT id, name, score FROM t")
+	require.NoError(t, err)
+	assert.Len(t, rows, 2)
+	assert.Equal(t, int64(1), rows[0]["id"])
+	assert.Equal(t, "alice", rows[0]["name"])
+	assert.Equal(t, 95.5, rows[0]["score"])
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestSQLiteConnector_Query_Failure 触发 Query 失败路径
+func TestSQLiteConnector_Query_Failure(t *testing.T) {
+	c := &sqliteConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	mock.ExpectQuery("SELECT").WillReturnError(fmt.Errorf("synthetic db error"))
+	_, err := c.Query(context.Background(), "SELECT 1")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "query failed")
+}
+
+// TestSQLiteConnector_GetColumns_RealPath 触发 GetColumns 的真实 PRAGMA 路径
+func TestSQLiteConnector_GetColumns_RealPath(t *testing.T) {
+	c := &sqliteConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	// PRAGMA table_info 返回 6 列：cid, name, type, notnull, dflt_value, pk
+	mock.ExpectQuery("PRAGMA table_info").WillReturnRows(
+		sqlmock.NewRows([]string{"cid", "name", "type", "notnull", "dflt_value", "pk"}).
+			AddRow(0, "id", "INTEGER", 0, nil, 1).
+			AddRow(1, "name", "TEXT", 0, nil, 0).
+			AddRow(2, "score", "REAL", 0, nil, 0),
+	)
+
+	cols, err := c.GetColumns(context.Background(), "", "t1")
+	require.NoError(t, err)
+	assert.Len(t, cols, 3)
+	assert.Equal(t, "id", cols[0].Name)
+	assert.Equal(t, "name", cols[1].Name)
+	assert.Equal(t, "score", cols[2].Name)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// TestSQLiteConnector_GetColumns_ScanError 触发 Scan 失败
+func TestSQLiteConnector_GetColumns_ScanError(t *testing.T) {
+	c := &sqliteConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	// 故意返回 6 列但 Scan 时 int 解析错误（注入一个非 int 字符串到 cid）
+	mock.ExpectQuery("PRAGMA table_info").WillReturnRows(
+		sqlmock.NewRows([]string{"cid", "name", "type", "notnull", "dflt_value", "pk"}).
+			AddRow("not-int", "name", "TEXT", 0, nil, 0),
+	)
+
+	_, err := c.GetColumns(context.Background(), "", "t1")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "scan column info failed")
+}
+
+// TestSQLiteConnector_GetColumns_RowIterationError 触发 rows.Err() 路径
+func TestSQLiteConnector_GetColumns_RowIterationError(t *testing.T) {
+	c := &sqliteConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	mock.ExpectQuery("PRAGMA table_info").WillReturnRows(
+		sqlmock.NewRows([]string{"cid", "name", "type", "notnull", "dflt_value", "pk"}).
+			AddRow(0, "id", "INTEGER", 0, nil, 1).
+			RowError(0, fmt.Errorf("iter error")),
+	)
+
+	_, err := c.GetColumns(context.Background(), "", "t1")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "row iteration failed")
+}
+
+// 触发 driver.Value 实现检查（用于覆盖 scanRows 中的 value 转换分支）
+var _ driver.Value = (*driverValueString)(nil)
+
+type driverValueString string
+
+func (d driverValueString) Value() (driver.Value, error) { return string(d), nil }
+
+// ---------------- MySQL/PostgreSQL/ClickHouse/Sqlserver/Oracle GetColumns 真实路径覆盖 ----------------
+
+func TestMysqlConnector_Query_RealScanRows(t *testing.T) {
+	c := &mysqlConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	mock.ExpectQuery("SELECT").WillReturnRows(
+		sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "alice").AddRow(2, "bob"),
+	)
+	rows, err := c.Query(context.Background(), "SELECT id, name FROM t")
+	require.NoError(t, err)
+	assert.Len(t, rows, 2)
+	assert.Equal(t, "alice", rows[0]["name"])
+}
+
+func TestMysqlConnector_Query_Failure(t *testing.T) {
+	c := &mysqlConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	mock.ExpectQuery("SELECT").WillReturnError(fmt.Errorf("synth"))
+	_, err := c.Query(context.Background(), "SELECT 1")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "query failed")
+}
+
+func TestMysqlConnector_GetColumns_RealPath(t *testing.T) {
+	c := &mysqlConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	// INFORMATION_SCHEMA.COLUMNS schema: COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE
+	mock.ExpectQuery("INFORMATION_SCHEMA").WillReturnRows(
+		sqlmock.NewRows([]string{"COLUMN_NAME", "DATA_TYPE", "CHARACTER_MAXIMUM_LENGTH", "NUMERIC_PRECISION", "NUMERIC_SCALE"}).
+			AddRow("id", "int", nil, 10, 0).
+			AddRow("name", "varchar", 64, nil, nil),
+	)
+	cols, err := c.GetColumns(context.Background(), "testdb", "t1")
+	require.NoError(t, err)
+	assert.Len(t, cols, 2)
+	assert.Equal(t, "id", cols[0].Name)
+	assert.Equal(t, "int", cols[0].Type)
+	assert.Equal(t, 10, cols[0].Precision)
+	assert.Equal(t, "name", cols[1].Name)
+	assert.Equal(t, 64, cols[1].Length)
+}
+
+func TestMysqlConnector_GetColumns_Failure(t *testing.T) {
+	c := &mysqlConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	mock.ExpectQuery("INFORMATION_SCHEMA").WillReturnError(fmt.Errorf("synth"))
+	_, err := c.GetColumns(context.Background(), "testdb", "t1")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "get columns failed")
+}
+
+func TestMysqlConnector_GetColumns_RowIterationError(t *testing.T) {
+	c := &mysqlConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	mock.ExpectQuery("INFORMATION_SCHEMA").WillReturnRows(
+		sqlmock.NewRows([]string{"COLUMN_NAME", "DATA_TYPE", "CHARACTER_MAXIMUM_LENGTH", "NUMERIC_PRECISION", "NUMERIC_SCALE"}).
+			AddRow("id", "int", nil, 10, 0).
+			RowError(0, fmt.Errorf("iter")),
+	)
+	_, err := c.GetColumns(context.Background(), "testdb", "t1")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "row iteration failed")
+}
+
+func TestMysqlConnector_Close_RealPath(t *testing.T) {
+	c := &mysqlConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	mock.ExpectClose()
+	assert.NoError(t, c.Close())
+	assert.Nil(t, c.db)
+}
+
+func TestPostgresqlConnector_Query_RealScanRows(t *testing.T) {
+	c := &postgresqlConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	mock.ExpectQuery("SELECT").WillReturnRows(
+		sqlmock.NewRows([]string{"n"}).AddRow(int64(42)),
+	)
+	rows, err := c.Query(context.Background(), "SELECT n FROM t")
+	require.NoError(t, err)
+	assert.Len(t, rows, 1)
+}
+
+func TestPostgresqlConnector_Query_Failure(t *testing.T) {
+	c := &postgresqlConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	mock.ExpectQuery("SELECT").WillReturnError(fmt.Errorf("synth"))
+	_, err := c.Query(context.Background(), "SELECT 1")
+	assert.Error(t, err)
+}
+
+func TestPostgresqlConnector_GetColumns_RealPath(t *testing.T) {
+	c := &postgresqlConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	// information_schema.columns: column_name, data_type, character_maximum_length, numeric_precision, numeric_scale
+	mock.ExpectQuery("information_schema").WillReturnRows(
+		sqlmock.NewRows([]string{"column_name", "data_type", "character_maximum_length", "numeric_precision", "numeric_scale"}).
+			AddRow("id", "integer", nil, 32, 0).
+			AddRow("name", "varchar", 128, nil, nil),
+	)
+	cols, err := c.GetColumns(context.Background(), "public", "t1")
+	require.NoError(t, err)
+	assert.Len(t, cols, 2)
+	assert.Equal(t, "id", cols[0].Name)
+	assert.Equal(t, "name", cols[1].Name)
+}
+
+func TestPostgresqlConnector_GetColumns_Failure(t *testing.T) {
+	c := &postgresqlConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	mock.ExpectQuery("information_schema").WillReturnError(fmt.Errorf("synth"))
+	_, err := c.GetColumns(context.Background(), "public", "t1")
+	assert.Error(t, err)
+}
+
+func TestPostgresqlConnector_GetColumns_RowIterationError(t *testing.T) {
+	c := &postgresqlConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	mock.ExpectQuery("information_schema").WillReturnRows(
+		sqlmock.NewRows([]string{"column_name", "data_type", "character_maximum_length", "numeric_precision", "numeric_scale"}).
+			AddRow("id", "integer", nil, 32, 0).
+			RowError(0, fmt.Errorf("iter")),
+	)
+	_, err := c.GetColumns(context.Background(), "public", "t1")
+	assert.Error(t, err)
+}
+
+func TestClickhouseConnector_Query_RealScanRows(t *testing.T) {
+	c := &clickhouseConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	mock.ExpectQuery("SELECT").WillReturnRows(
+		sqlmock.NewRows([]string{"n"}).AddRow(int64(1)),
+	)
+	rows, err := c.Query(context.Background(), "SELECT n")
+	require.NoError(t, err)
+	assert.Len(t, rows, 1)
+}
+
+func TestClickhouseConnector_Query_Failure(t *testing.T) {
+	c := &clickhouseConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	mock.ExpectQuery("SELECT").WillReturnError(fmt.Errorf("synth"))
+	_, err := c.Query(context.Background(), "SELECT 1")
+	assert.Error(t, err)
+}
+
+func TestClickhouseConnector_GetColumns_RealPath(t *testing.T) {
+	c := &clickhouseConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	// system.columns: name, type, length, precision, scale
+	mock.ExpectQuery("system.columns").WillReturnRows(
+		sqlmock.NewRows([]string{"name", "type", "length", "precision", "scale"}).
+			AddRow("id", "UInt64", 0, 0, 0).
+			AddRow("name", "String", 0, 0, 0),
+	)
+	cols, err := c.GetColumns(context.Background(), "default", "t1")
+	require.NoError(t, err)
+	assert.Len(t, cols, 2)
+	assert.Equal(t, "id", cols[0].Name)
+	assert.Equal(t, "UInt64", cols[0].Type)
+}
+
+func TestClickhouseConnector_GetColumns_Failure(t *testing.T) {
+	c := &clickhouseConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	mock.ExpectQuery("system.columns").WillReturnError(fmt.Errorf("synth"))
+	_, err := c.GetColumns(context.Background(), "default", "t1")
+	assert.Error(t, err)
+}
+
+func TestClickhouseConnector_GetColumns_RowIterationError(t *testing.T) {
+	c := &clickhouseConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	mock.ExpectQuery("system.columns").WillReturnRows(
+		sqlmock.NewRows([]string{"name", "type", "length", "precision", "scale"}).
+			AddRow("id", "UInt64", 0, 0, 0).
+			RowError(0, fmt.Errorf("iter")),
+	)
+	_, err := c.GetColumns(context.Background(), "default", "t1")
+	assert.Error(t, err)
+}
+
+func TestSqlserverConnector_Query_RealScanRows(t *testing.T) {
+	c := &sqlserverConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	mock.ExpectQuery("SELECT").WillReturnRows(
+		sqlmock.NewRows([]string{"n"}).AddRow(int64(1)),
+	)
+	rows, err := c.Query(context.Background(), "SELECT n")
+	require.NoError(t, err)
+	assert.Len(t, rows, 1)
+}
+
+func TestSqlserverConnector_Query_Failure(t *testing.T) {
+	c := &sqlserverConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	mock.ExpectQuery("SELECT").WillReturnError(fmt.Errorf("synth"))
+	_, err := c.Query(context.Background(), "SELECT 1")
+	assert.Error(t, err)
+}
+
+func TestSqlserverConnector_GetColumns_RealPath(t *testing.T) {
+	c := &sqlserverConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	// INFORMATION_SCHEMA.COLUMNS for SQL Server
+	mock.ExpectQuery("INFORMATION_SCHEMA").WillReturnRows(
+		sqlmock.NewRows([]string{"COLUMN_NAME", "DATA_TYPE", "CHARACTER_MAXIMUM_LENGTH", "NUMERIC_PRECISION", "NUMERIC_SCALE"}).
+			AddRow("id", "int", nil, 10, 0),
+	)
+	cols, err := c.GetColumns(context.Background(), "testdb", "t1")
+	require.NoError(t, err)
+	assert.Len(t, cols, 1)
+}
+
+func TestSqlserverConnector_GetColumns_Failure(t *testing.T) {
+	c := &sqlserverConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	mock.ExpectQuery("INFORMATION_SCHEMA").WillReturnError(fmt.Errorf("synth"))
+	_, err := c.GetColumns(context.Background(), "testdb", "t1")
+	assert.Error(t, err)
+}
+
+func TestOracleConnector_Query_RealScanRows(t *testing.T) {
+	c := &oracleConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	mock.ExpectQuery("SELECT").WillReturnRows(
+		sqlmock.NewRows([]string{"n"}).AddRow(int64(1)),
+	)
+	rows, err := c.Query(context.Background(), "SELECT 1 FROM DUAL")
+	require.NoError(t, err)
+	assert.Len(t, rows, 1)
+}
+
+func TestOracleConnector_Query_Failure(t *testing.T) {
+	c := &oracleConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	mock.ExpectQuery("SELECT").WillReturnError(fmt.Errorf("synth"))
+	_, err := c.Query(context.Background(), "SELECT 1 FROM DUAL")
+	assert.Error(t, err)
+}
+
+func TestOracleConnector_GetColumns_RealPath(t *testing.T) {
+	c := &oracleConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	// all_tab_columns: COLUMN_NAME, DATA_TYPE, DATA_LENGTH, DATA_PRECISION, DATA_SCALE
+	mock.ExpectQuery("all_tab_columns").WillReturnRows(
+		sqlmock.NewRows([]string{"COLUMN_NAME", "DATA_TYPE", "DATA_LENGTH", "DATA_PRECISION", "DATA_SCALE"}).
+			AddRow("ID", "NUMBER", 22, 10, 0).
+			AddRow("NAME", "VARCHAR2", 64, nil, nil),
+	)
+	cols, err := c.GetColumns(context.Background(), "TESTUSER", "T1")
+	require.NoError(t, err)
+	assert.Len(t, cols, 2)
+	assert.Equal(t, "ID", cols[0].Name)
+	assert.Equal(t, 64, cols[1].Length)
+}
+
+func TestOracleConnector_GetColumns_Failure(t *testing.T) {
+	c := &oracleConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	mock.ExpectQuery("all_tab_columns").WillReturnError(fmt.Errorf("synth"))
+	_, err := c.GetColumns(context.Background(), "TESTUSER", "T1")
+	assert.Error(t, err)
+}
+
+func TestHiveConnector_Query_RealScanRows(t *testing.T) {
+	c := &hiveConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	mock.ExpectQuery("SELECT").WillReturnRows(
+		sqlmock.NewRows([]string{"n"}).AddRow(int64(1)),
+	)
+	rows, err := c.Query(context.Background(), "SELECT n")
+	require.NoError(t, err)
+	assert.Len(t, rows, 1)
+}
+
+func TestHiveConnector_Query_Failure(t *testing.T) {
+	c := &hiveConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	mock.ExpectQuery("SELECT").WillReturnError(fmt.Errorf("synth"))
+	_, err := c.Query(context.Background(), "SELECT 1")
+	assert.Error(t, err)
+}
+
+func TestHiveConnector_GetColumns_RealPath(t *testing.T) {
+	c := &hiveConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	mock.ExpectQuery("INFORMATION_SCHEMA").WillReturnRows(
+		sqlmock.NewRows([]string{"COLUMN_NAME", "DATA_TYPE", "Length", "Precision", "Scale"}).
+			AddRow("id", "int", 0, 0, 0).
+			AddRow("name", "string", 0, 0, 0),
+	)
+	cols, err := c.GetColumns(context.Background(), "default", "t1")
+	require.NoError(t, err)
+	assert.Len(t, cols, 2)
+	assert.Equal(t, "id", cols[0].Name)
+}
+
+func TestHiveConnector_GetColumns_Failure(t *testing.T) {
+	c := &hiveConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	mock.ExpectQuery("DESCRIBE").WillReturnError(fmt.Errorf("synth"))
+	_, err := c.GetColumns(context.Background(), "default", "t1")
+	assert.Error(t, err)
+}
+
+// 验证 Close() 在已连接时调用 db.Close()(成功路径覆盖)
+func TestConnectorClose_RealDB(t *testing.T) {
+	// sqlmock 的 DB 在 ExpectationsMet 后调用 Close() 会失败，
+	// 所以这个测试用 ExpectationsWereMet 之前主动调用 Close。
+	c := &mysqlConnector{}
+	db, mock, cleanup := withMockSQLiteDB(t)
+	defer cleanup()
+	c.db = db
+
+	// mock 一个 no-op 的 query 让 close 之前的 state 正常
+	mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"x"}).AddRow(1))
+	_, _ = c.Query(context.Background(), "SELECT 1")
+
+	// 现在显式 expect Close（这会满足 sqlmock 的预期）
+	mock.ExpectClose()
+	assert.NoError(t, c.Close())
+	assert.Nil(t, c.db)
 }

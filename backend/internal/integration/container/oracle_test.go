@@ -81,4 +81,18 @@ func TestOracle_RealContainer(t *testing.T) {
 	rows, err := conn.Query(ctx, "SELECT 1 AS n FROM DUAL")
 	require.NoError(t, err)
 	assert.Len(t, rows, 1)
+
+	// Create a temp table and verify GetColumns reads ALL_TAB_COLUMNS.
+	// Oracle identifiers are upper-case by default; use unquoted names.
+	_, err = conn.Query(ctx, `CREATE TABLE t1 (id NUMBER(10) PRIMARY KEY, name VARCHAR2(64), score NUMBER(10,2))`)
+	require.NoError(t, err)
+	cols, err := conn.GetColumns(ctx, "TESTUSER", "T1")
+	require.NoError(t, err)
+	names := make([]string, 0, len(cols))
+	for _, c := range cols {
+		names = append(names, c.Name)
+	}
+	assert.Contains(t, names, "ID")
+	assert.Contains(t, names, "NAME")
+	assert.Contains(t, names, "SCORE")
 }

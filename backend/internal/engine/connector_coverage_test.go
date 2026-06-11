@@ -325,3 +325,191 @@ func TestDorisStarRocksMongoDB_Connect_MissingFields(t *testing.T) {
 		})
 	}
 }
+
+func TestMysqlConnector_NotConnected(t *testing.T) {
+	c := &mysqlConnector{}
+
+	_, err := c.Query(context.Background(), "SELECT 1")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not connected")
+
+	_, err = c.GetColumns(context.Background(), "", "t")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not connected")
+
+	assert.NoError(t, c.Close(), "Close on nil db should be no-op")
+}
+
+func TestPostgresqlConnector_NotConnected(t *testing.T) {
+	c := &postgresqlConnector{}
+
+	_, err := c.Query(context.Background(), "SELECT 1")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not connected")
+
+	_, err = c.GetColumns(context.Background(), "", "t")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not connected")
+
+	assert.NoError(t, c.Close(), "Close on nil db should be no-op")
+}
+
+func TestSqliteConnector_NotConnected(t *testing.T) {
+	c := &sqliteConnector{}
+
+	_, err := c.Query(context.Background(), "SELECT 1")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not connected")
+
+	_, err = c.GetColumns(context.Background(), "", "t")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not connected")
+
+	assert.NoError(t, c.Close(), "Close on nil db should be no-op")
+}
+
+func TestDorisConnector_NotConnected(t *testing.T) {
+	// doris/starrocks/mongodb 复用 mysqlConnector，验证 lifecycle 一致
+	for _, dsType := range []string{"doris", "starrocks", "mongodb"} {
+		t.Run(dsType, func(t *testing.T) {
+			conn, err := NewConnector(dsType)
+			assert.NoError(t, err)
+
+			_, err = conn.Query(context.Background(), "SELECT 1")
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "not connected")
+
+			_, err = conn.GetColumns(context.Background(), "", "t")
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "not connected")
+
+			assert.NoError(t, conn.Close())
+		})
+	}
+}
+
+func TestSqlserverConnector_BuildDSN_MissingFields(t *testing.T) {
+	c := &sqlserverConnector{}
+
+	// 缺 host
+	_, err := c.buildDSN(`{"port":1433,"username":"u","password":"p","database":"d"}`)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "host")
+
+	// 缺 port
+	_, err = c.buildDSN(`{"host":"h","username":"u","password":"p","database":"d"}`)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "port")
+
+	// 缺 username
+	_, err = c.buildDSN(`{"host":"h","port":1433,"password":"p","database":"d"}`)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "username")
+
+	// 缺 database
+	_, err = c.buildDSN(`{"host":"h","port":1433,"username":"u","password":"p"}`)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "database")
+
+	// invalid JSON
+	_, err = c.buildDSN(`not-json`)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid config json")
+}
+
+func TestMysqlConnector_BuildDSN_MissingFields(t *testing.T) {
+	c := &mysqlConnector{}
+
+	// 缺 host
+	_, err := c.buildDSN(`{"port":3306,"username":"u","password":"p","database":"d"}`)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "host")
+
+	// 缺 port
+	_, err = c.buildDSN(`{"host":"h","username":"u","password":"p","database":"d"}`)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "port")
+
+	// 缺 username
+	_, err = c.buildDSN(`{"host":"h","port":3306,"password":"p","database":"d"}`)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "username")
+
+	// 缺 database
+	_, err = c.buildDSN(`{"host":"h","port":3306,"username":"u","password":"p"}`)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "database")
+
+	// invalid JSON
+	_, err = c.buildDSN(`not-json`)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid config json")
+}
+
+func TestPostgresqlConnector_BuildDSN_MissingFields(t *testing.T) {
+	c := &postgresqlConnector{}
+
+	// 缺 host
+	_, err := c.buildDSN(`{"port":5432,"username":"u","password":"p","database":"d"}`)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "host")
+
+	// 缺 port
+	_, err = c.buildDSN(`{"host":"h","username":"u","password":"p","database":"d"}`)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "port")
+
+	// 缺 username
+	_, err = c.buildDSN(`{"host":"h","port":5432,"password":"p","database":"d"}`)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "username")
+
+	// 缺 database
+	_, err = c.buildDSN(`{"host":"h","port":5432,"username":"u","password":"p"}`)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "database")
+
+	// invalid JSON
+	_, err = c.buildDSN(`not-json`)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid config json")
+}
+
+// ---------------- connector.Connect with invalid port type (port 不是数字) ----------------
+
+func TestMysqlConnector_Connect_InvalidPortType(t *testing.T) {
+	c := &mysqlConnector{}
+	// port 应该是 float64，传字符串触发 buildDSN 失败
+	err := c.Connect(`{"host":"h","port":"3306","username":"u","password":"p","database":"d"}`)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "port")
+}
+
+func TestPostgresqlConnector_Connect_InvalidPortType(t *testing.T) {
+	c := &postgresqlConnector{}
+	err := c.Connect(`{"host":"h","port":"5432","username":"u","password":"p","database":"d"}`)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "port")
+}
+
+func TestSqlserverConnector_Connect_InvalidPortType(t *testing.T) {
+	c := &sqlserverConnector{}
+	err := c.Connect(`{"host":"h","port":"1433","username":"u","password":"p","database":"d"}`)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "port")
+}
+
+// ---------------- BuildDSN custom SSL mode / port boundary ----------------
+
+func TestPostgresqlConnector_BuildDSN_NoSSL(t *testing.T) {
+	c := &postgresqlConnector{}
+	// 不写 sslmode，验证默认值
+	dsn, err := c.buildDSN(`{"host":"h","port":5432,"username":"u","password":"p","database":"d"}`)
+	assert.NoError(t, err)
+	assert.Contains(t, dsn, "sslmode=prefer")
+}
+
+// ---------------- ScanRows + 真实 SQLite data path ----------------
+//
+// 已经在 integration/container/sqlite_test.go 覆盖了真实 SQLite 路径，
+// 这里在单元层用 sqlmock 覆盖 scanRows 的 []byte 数字回退路径。

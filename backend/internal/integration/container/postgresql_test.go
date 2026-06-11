@@ -65,4 +65,17 @@ func TestPostgres_RealContainer(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, rows, 1)
 	assert.EqualValues(t, 1, rows[0]["n"])
+
+	// Create a temp table and verify GetColumns reads INFORMATION_SCHEMA.
+	_, err = conn.Query(ctx, `CREATE TABLE IF NOT EXISTS public.t1 (id SERIAL PRIMARY KEY, name TEXT, score NUMERIC(10,2))`)
+	require.NoError(t, err)
+	cols, err := conn.GetColumns(ctx, "public", "t1")
+	require.NoError(t, err)
+	names := make([]string, 0, len(cols))
+	for _, c := range cols {
+		names = append(names, c.Name)
+	}
+	assert.Contains(t, names, "id")
+	assert.Contains(t, names, "name")
+	assert.Contains(t, names, "score")
 }
