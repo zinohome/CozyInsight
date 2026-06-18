@@ -1,7 +1,4 @@
-function authHeaders(): Record<string, string> {
-  const token = localStorage.getItem('token')
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
+import request from './request';
 
 export interface ShareLink {
   id: number
@@ -16,27 +13,16 @@ export interface ShareLink {
 
 export const shareAPI = {
   create: (dashboardId: number, password?: string, expireHours?: number) =>
-    fetch(`/api/v1/dashboard/${dashboardId}/share`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ password, expireHours }),
-    }).then(r => r.json()),
+    request.post(`/dashboard/${dashboardId}/share`, { password, expireHours }),
 
   get: (token: string, password?: string) => {
     const url = password
-      ? `/api/v1/share/${token}?password=${encodeURIComponent(password)}`
-      : `/api/v1/share/${token}`
-    return fetch(url).then(r => r.json())
+      ? `/share/${token}?password=${encodeURIComponent(password)}`
+      : `/share/${token}`
+    return request.get(url)
   },
 
-  list: () =>
-    fetch('/api/v1/share-links', {
-      headers: authHeaders(),
-    }).then(r => r.json()),
+  list: () => request.get('/share-links'),
 
-  remove: (id: number) =>
-    fetch(`/api/v1/dashboard/${id}/share`, {
-      method: 'DELETE',
-      headers: authHeaders(),
-    }).then(r => r.json()),
+  remove: (id: number) => request.delete(`/dashboard/${id}/share`),
 }

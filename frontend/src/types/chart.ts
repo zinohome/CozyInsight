@@ -26,6 +26,8 @@ export type ChartType =
   | 'kpi'
   | 'pivot-table'
   | 'table'
+  | 'column'           // 柱状图别名(本地 c0e2857 引入)
+  | 'map'              // 地图(本地 c0e2857 引入)
 
 export interface Chart {
   id: number
