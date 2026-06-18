@@ -1,110 +1,361 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Table, Button, Space, Tag, Modal, Form, Input, message } from 'antd'
-import { dashboardAPI } from '@/api/dashboard'
-import type { Dashboard } from '@/types/dashboard'
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+    Table,
+    Button,
+    Space,
+    message,
+    Popconfirm,
+    Card,
+    Breadcrumb,
+    Modal,
+    Form,
+    Input,
+    Radio,
+} from 'antd';
+import {
+    PlusOutlined,
+    EditOutlined,
+    DeleteOutlined,
+    FolderOutlined,
+    FolderAddOutlined,
+    DashboardOutlined,
+    FundProjectionScreenOutlined,
+    HomeOutlined,
+} from '@ant-design/icons';
+import type { ColumnsType } from 'antd/es/table';
+import { dashboardAPI } from '@/api/dashboard';
+import type { Dashboard, CreateDashboardRequest } from '@/types/dashboard';
 
-export default function DashboardPage() {
-  const navigate = useNavigate()
-  const [list, setList] = useState<Dashboard[]>([])
-  const [loading, setLoading] = useState(false)
-  const [modalVisible, setModalVisible] = useState(false)
-  const [createType, setCreateType] = useState<'dashboard' | 'screen'>('dashboard')
-  const [searchText, setSearchText] = useState('')
-  const [form] = Form.useForm()
-
-  const fetchList = async () => {
-    setLoading(true)
-    try {
-      const res = await dashboardAPI.list()
-      setList(res)
-    } catch {
-      message.error('获取仪表板列表失败')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchList()
-  }, [])
-
-  const handleCreate = async (values: { title: string; config?: string }) => {
-    try {
-      await dashboardAPI.create({ title: values.title, type: createType, config: values.config || '{}' })
-      message.success('创建成功')
-      setModalVisible(false)
-      form.resetFields()
-      fetchList()
-    } catch {
-      message.error('创建失败')
-    }
-  }
-
-  const handleDelete = useCallback(async (id: number) => {
-    try {
-      await dashboardAPI.remove(id)
-      message.success('删除成功')
-      fetchList()
-    } catch {
-      message.error('删除失败')
-    }
-  }, [])
-
-  const openCreateModal = (type: 'dashboard' | 'screen') => {
-    setCreateType(type)
-    form.resetFields()
-    setModalVisible(true)
-  }
-
-  const filteredList = useMemo(() => {
-    if (!searchText) return list
-    return list.filter(d => d.title.toLowerCase().includes(searchText.toLowerCase()))
-  }, [list, searchText])
-
-  const columns = useMemo(() => [
-    { title: '标题', dataIndex: 'title' },
-    { title: '类型', dataIndex: 'type', render: (type: 'dashboard' | 'screen') => (type === 'screen' ? <Tag color="purple">数据大屏</Tag> : <Tag color="blue">仪表板</Tag>) },
-    { title: '状态', dataIndex: 'status', render: (status: number) => (status === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">禁用</Tag>) },
-    { title: '创建时间', dataIndex: 'createdAt' },
-    {
-      title: '操作',
-      render: (_: unknown, record: Dashboard) => (
-        <Space>
-          <Button type="link" onClick={() => navigate(record.type === 'screen' ? `/screen/view/${record.id}` : `/dashboard/view/${record.id}`)}>查看</Button>
-          <Button type="link" onClick={() => navigate(record.type === 'screen' ? `/screen/designer/${record.id}` : `/dashboard/designer/${record.id}`)}>设计</Button>
-          <Button type="link" danger onClick={() => handleDelete(record.id)}>删除</Button>
-        </Space>
-      ),
-    },
-  ], [navigate, handleDelete])
-
-  return (
-    <div style={{ padding: 24 }}>
-      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Space>
-          <Button type="primary" onClick={() => openCreateModal('dashboard')}>新建仪表板</Button>
-          <Button type="primary" onClick={() => openCreateModal('screen')}>新建数据大屏</Button>
-        </Space>
-        <Input.Search
-          placeholder="搜索标题"
-          allowClear
-          style={{ width: 250 }}
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-        />
-      </div>
-      <Table rowKey="id" columns={columns} dataSource={filteredList} loading={loading} pagination={{ pageSize: 10, showSizeChanger: true }} />
-      <Modal title={createType === 'screen' ? '新建数据大屏' : '新建仪表板'} open={modalVisible} onCancel={() => setModalVisible(false)} footer={null}>
-        <Form form={form} onFinish={handleCreate} layout="vertical">
-          <Form.Item name="title" label="标题" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item>
-            <Button type="primary" htmlType="submit">创建</Button>
-          </Form.Item>
-        </Form>
-      </Modal>
-    </div>
-  )
+interface BreadcrumbItem {
+    id: string;
+    name: string;
 }
+
+const DashboardList = () => {
+    const navigate = useNavigate();
+    const [loading, setLoading] = useState(false);
+    const [dashboards, setDashboards] = useState<Dashboard[]>([]);
+    const [currentPid, setCurrentPid] = useState('0');
+    const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([
+        { id: '0', name: '根目录' },
+    ]);
+
+    // 模态框状态
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [modalType, setModalType] = useState<'folder' | 'dashboard'>('dashboard');
+    const [form] = Form.useForm();
+    const [submitting, setSubmitting] = useState(false);
+
+    // 重命名状态
+    const [renameTarget, setRenameTarget] = useState<Dashboard | null>(null);
+    const [renameValue, setRenameValue] = useState('');
+    const [renaming, setRenaming] = useState(false);
+
+    // 加载仪表板列表
+    const loadDashboards = async (pid: string) => {
+        try {
+            setLoading(true);
+            const data = await dashboardAPI.list();
+            setDashboards(data);
+        } catch (error: any) {
+            message.error(error.message || '加载列表失败');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadDashboards(currentPid);
+    }, [currentPid]);
+
+    // 处理文件夹点击
+    const handleFolderClick = (record: Dashboard) => {
+        setCurrentPid(record.id);
+        setBreadcrumbs([...breadcrumbs, { id: record.id, name: record.name }]);
+    };
+
+    // 处理面包屑点击
+    const handleBreadcrumbClick = (item: BreadcrumbItem, index: number) => {
+        setCurrentPid(item.id);
+        setBreadcrumbs(breadcrumbs.slice(0, index + 1));
+    };
+
+    // 删除仪表板/文件夹
+    const handleDelete = async (id: string) => {
+        try {
+            await dashboardAPI.remove(id);
+            message.success('删除成功');
+            loadDashboards(currentPid);
+        } catch (error: any) {
+            message.error(error.message || '删除失败');
+        }
+    };
+
+    // 打开创建模态框
+    const showCreateModal = (type: 'folder' | 'dashboard') => {
+        setModalType(type);
+        form.resetFields();
+        form.setFieldsValue({
+            nodeType: type,
+            type: type === 'dashboard' ? 'dashboard' : undefined,
+        });
+        setIsModalOpen(true);
+    };
+
+    // 提交创建
+    const handleCreate = async () => {
+        try {
+            const values = await form.validateFields();
+            setSubmitting(true);
+
+            const data: CreateDashboardRequest = {
+                name: values.name,
+                pid: currentPid,
+                nodeType: modalType,
+                type: values.type,
+            };
+
+            await dashboardAPI.create(data);
+            message.success('创建成功');
+            setIsModalOpen(false);
+            loadDashboards(currentPid);
+        } catch (error: any) {
+            message.error(error.message || '创建失败');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    // 打开重命名弹窗
+    const openRename = (record: Dashboard) => {
+        setRenameTarget(record);
+        setRenameValue(record.name);
+    };
+
+    // 提交重命名
+    const handleRename = async () => {
+        if (!renameTarget) return;
+        const trimmed = renameValue.trim();
+        if (!trimmed) {
+            message.warning('名称不能为空');
+            return;
+        }
+        if (trimmed === renameTarget.name) {
+            setRenameTarget(null);
+            return;
+        }
+        try {
+            setRenaming(true);
+            await dashboardAPI.update(renameTarget.id, { name: trimmed });
+            message.success('重命名成功');
+            setRenameTarget(null);
+            loadDashboards(currentPid);
+        } catch (error: any) {
+            message.error(error.message || '重命名失败');
+        } finally {
+            setRenaming(false);
+        }
+    };
+
+    // 表格列定义
+    const columns: ColumnsType<Dashboard> = [
+        {
+            title: '名称',
+            dataIndex: 'name',
+            key: 'name',
+            render: (text: string, record: Dashboard) => (
+                <Space>
+                    {record.nodeType === 'folder' ? (
+                        <FolderOutlined style={{ color: '#1890ff' }} />
+                    ) : record.type === 'dataV' ? (
+                        <FundProjectionScreenOutlined style={{ color: '#722ed1' }} />
+                    ) : (
+                        <DashboardOutlined style={{ color: '#52c41a' }} />
+                    )}
+                    {record.nodeType === 'folder' ? (
+                        <a onClick={() => handleFolderClick(record)}>{text}</a>
+                    ) : (
+                        <span>{text}</span>
+                    )}
+                </Space>
+            ),
+        },
+        {
+            title: '类型',
+            dataIndex: 'type',
+            key: 'type',
+            width: 120,
+            render: (text: string, record: Dashboard) => {
+                if (record.nodeType === 'folder') return '文件夹';
+                return text === 'dataV' ? '数据大屏' : '仪表板';
+            },
+        },
+        {
+            title: '状态',
+            dataIndex: 'status',
+            key: 'status',
+            width: 100,
+            render: (status: number) => (status === 1 ? '已发布' : '未发布'),
+        },
+        {
+            title: '创建时间',
+            dataIndex: 'createTime',
+            key: 'createTime',
+            width: 180,
+            render: (time: number) =>
+                time ? new Date(time).toLocaleString('zh-CN') : '-',
+        },
+        {
+            title: '操作',
+            key: 'action',
+            width: 200,
+            render: (_, record) => (
+                <Space>
+                    {record.nodeType === 'dashboard' && (
+                        <Button
+                            type="link"
+                            size="small"
+                            icon={<EditOutlined />}
+                            onClick={() => navigate(`/dashboard/edit/${record.id}`)}
+                        >
+                            编辑
+                        </Button>
+                    )}
+                    <Button
+                        type="link"
+                        size="small"
+                        icon={<EditOutlined />}
+                        onClick={() => openRename(record)}
+                    >
+                        重命名
+                    </Button>
+                    <Popconfirm
+                        title="确认删除"
+                        description={`确定要删除这个${record.nodeType === 'folder' ? '文件夹' : '仪表板'
+                            }吗？`}
+                        onConfirm={() => handleDelete(record.id)}
+                        okText="确定"
+                        cancelText="取消"
+                    >
+                        <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                            删除
+                        </Button>
+                    </Popconfirm>
+                </Space>
+            ),
+        },
+    ];
+
+    return (
+        <div style={{ padding: '24px' }}>
+            <Card>
+                {/* 工具栏 */}
+                <div
+                    style={{
+                        marginBottom: 16,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                    }}
+                >
+                    {/* 面包屑导航 */}
+                    <Breadcrumb>
+                        {breadcrumbs.map((item, index) => (
+                            <Breadcrumb.Item key={item.id}>
+                                {index === breadcrumbs.length - 1 ? (
+                                    item.name === '根目录' ? <HomeOutlined /> : item.name
+                                ) : (
+                                    <a onClick={() => handleBreadcrumbClick(item, index)}>
+                                        {item.name === '根目录' ? <HomeOutlined /> : item.name}
+                                    </a>
+                                )}
+                            </Breadcrumb.Item>
+                        ))}
+                    </Breadcrumb>
+
+                    <Space>
+                        <Button
+                            icon={<FolderAddOutlined />}
+                            onClick={() => showCreateModal('folder')}
+                        >
+                            新建文件夹
+                        </Button>
+                        <Button
+                            type="primary"
+                            icon={<PlusOutlined />}
+                            onClick={() => showCreateModal('dashboard')}
+                        >
+                            新建仪表板
+                        </Button>
+                    </Space>
+                </div>
+
+                {/* 列表 */}
+                <Table
+                    columns={columns}
+                    dataSource={dashboards}
+                    rowKey="id"
+                    loading={loading}
+                    pagination={false}
+                />
+            </Card>
+
+            {/* 创建模态框 */}
+            <Modal
+                title={modalType === 'folder' ? '新建文件夹' : '新建仪表板'}
+                open={isModalOpen}
+                onOk={handleCreate}
+                onCancel={() => setIsModalOpen(false)}
+                confirmLoading={submitting}
+            >
+                <Form form={form} layout="vertical">
+                    <Form.Item
+                        label="名称"
+                        name="name"
+                        rules={[{ required: true, message: '请输入名称' }]}
+                    >
+                        <Input placeholder="请输入名称" />
+                    </Form.Item>
+
+                    {modalType === 'dashboard' && (
+                        <Form.Item
+                            label="类型"
+                            name="type"
+                            rules={[{ required: true, message: '请选择类型' }]}
+                            initialValue="dashboard"
+                        >
+                            <Radio.Group>
+                                <Radio value="dashboard">仪表板</Radio>
+                                <Radio value="dataV">数据大屏</Radio>
+                            </Radio.Group>
+                        </Form.Item>
+                    )}
+                </Form>
+            </Modal>
+
+            {/* 重命名弹窗 */}
+            <Modal
+                title="重命名"
+                open={renameTarget !== null}
+                onOk={handleRename}
+                onCancel={() => setRenameTarget(null)}
+                confirmLoading={renaming}
+                okText="保存"
+                cancelText="取消"
+                destroyOnClose
+            >
+                <Input
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onPressEnter={handleRename}
+                    placeholder="请输入新名称"
+                    maxLength={64}
+                    autoFocus
+                />
+            </Modal>
+        </div>
+    );
+};
+
+export default DashboardList;

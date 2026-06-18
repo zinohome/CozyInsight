@@ -46,3 +46,20 @@ export interface PreviewDataResponse {
   }>
   data: Array<Record<string, unknown>>
 }
+
+// 数据预览结果(后端 service.DataPreviewResult)
+export interface DataPreviewField {
+    name: string;
+    originName: string;
+    type: string;
+    deType: number;
+    groupType: string;
+    description?: string;
+    sample?: string;
+}
+
+export interface DataPreviewResult {
+    fields: DataPreviewField[];
+    data: Record<string, unknown>[];
+    total: number;
+}
