@@ -24,6 +24,8 @@ Thumbs.db
 
 # Go specific
 vendor/
+backend/server
+backend/coverage*.out
 
 # Claude Code tool indexes (regenerated locally per-session)
 .codegraph/
