@@ -57,20 +57,20 @@ docker-compose up -d
 - **`handler/`** — HTTP 请求/响应处理（Gin）。每个领域一个 handler（`chart_handler.go`、`datasource_handler.go` 等）。负责绑定 JSON 到 DTO、调用 Service、返回标准化响应。`common.go` 提供统一响应封装。
 - **`dto/`** — 请求/响应数据传输对象，handler 与 service 之间的契约。
 - **`service/`** — 业务逻辑层（无状态，构造函数注入 Repository）。包含数据集、图表、仪表板、RBAC、行级权限、缓存、分享链接、操作日志等。`errors.go` 定义领域错误。
-- **`repository/`** — 数据访问层（GORM）。每个 Repository 封装单一模型，方法必须传入 `context.Context` 并检查 `result.Error`。
-- **`model/`** — GORM 结构体，映射 DataEase 数据库 Schema。软删除模型含 `gorm.DeletedAt`。
+- **`repository/`** — 数据访问层（**sqlx**，`github.com/jmoiron/sqlx`）。每个 Repository 封装单一模型，方法必须传入 `context.Context` 并检查返回的 `error`。使用 `GetContext` / `SelectContext` / `NamedExecContext` / `ExecContext`，命名参数用 `:name` 占位符。
+- **`model/`** — **sqlx 标签**结构体，映射 DataEase 数据库 Schema。使用 `db:"column_name" json:"fieldName"` 标签，无 GORM 依赖。软删除通过显式 `deleted_at IS NULL` 过滤，不用 `gorm.DeletedAt`。
 - **`engine/`** — **跨数据源查询引擎（原生 Go，非 Avatica）**：
   - `query_engine.go` — 根据图表配置（`ChartQueryConfig`：维度/指标/过滤/排序）构建 SQL。
   - `connector.go` / `file_connector.go` — `DatasourceConnector` 接口及实现，通过 `database/sql` 驱动连接 MySQL、PostgreSQL、ClickHouse、SQLite、SQL Server，以及文件数据源。
   - `connector_pool.go` — 连接池管理。
-- **`middleware/`** — JWT 认证（`auth.go`）、权限检查、CORS、操作日志（`oper_log.go`）、panic 恢复。
+- **`middleware/`** — JWT 认证（`auth.go`）、权限检查、CORS、操作日志（`oper_log.go`）、panic 恢复、限流（`common.go` 中的 `RateLimit`）。
 - **`testutil/`** — 测试辅助（内存/临时数据库等）。
 
-公共/共享包位于 `backend/pkg/`：`config/`（Viper 配置加载）、`database/`（MySQL/GORM 初始化）、`cache/`（Redis 封装）、`jwt/`（JWT 签发/校验）、`logger/`（Zap）。
+公共/共享包位于 `backend/pkg/`：`config/`（Viper 配置加载）、`database/`（MySQL/**sqlx** 初始化）、`cache/`（Redis 封装）、`jwt/`（JWT 签发/校验）、`logger/`（Zap，含 `GinLogger` 中间件）。
 
 **路由**定义在 `backend/api/v1/router.go`（统一前缀 `/api/v1`，区分公开路由、`authd` 鉴权路由、`admin` 管理员路由），在 `backend/cmd/server/main.go` 中装配依赖。
 
-**数据库迁移**位于 `backend/migrations/`，按序号命名（`001_init.sql` … `011_share_links.sql`），由 docker-compose 的 MySQL 容器自动执行。
+**数据库迁移**位于 `backend/migrations/`，按序号命名（`001_init.sql` … `018_schedule_tasks.sql`），由 docker-compose 的 MySQL 容器自动执行。
 
 **核心不变量**：API 路由、请求/响应格式、数据库 Schema 必须与原版 Java DataEase 保持兼容。
 
@@ -130,3 +130,26 @@ docker-compose up -d
 - 前端入口：`frontend/src/main.tsx`
 - 前端根组件：`frontend/src/App.tsx`
 - 前端 Axios 封装：`frontend/src/api/request.ts`
+
+## 最近完成里程碑（2026-06-19）
+
+详细交接信息见 [HANDOFF.md](./HANDOFF.md)。最近 6 个 commit 同步在 `origin/main`：
+
+```
+6c3ab65 feat(backend): add RateLimit middleware + schedule system on sqlx stack
+2f54203 chore(gitignore): explicitly ignore backend/server binary + coverage
+ad0a71e chore: untrack backend/server binary (95MB Go build output)
+b5124f5 feat(frontend): DashboardList with breadcrumb + rename modal + folder support
+a5db0e7 fix(frontend): resolve all TypeScript errors (request wrapper + strict-mode sweep)
+5c02e32 fix(frontend): repair broken ChartEditor, fix import paths, add column chart type
+```
+
+**关键变更**：
+- 远程 main 从 GORM 迁移到 sqlx（已在本文件中相应修改说明）
+- 前端 `request.ts` 重写：`Unwrap<T>` 自动从 AxiosResponse 解包，统一错误拦截
+- 前端 `DashboardList` 完整重写，支持面包屑/文件夹/重命名/Popconfirm
+- 后端 `middleware/common.go` 新增 RateLimit（token bucket）
+- 后端新增 Schedule 完整系统：`TaskHandler` hook + 默认 handler + recordTaskRun 审计
+- untrack 了 95MB 的 `backend/server` 二进制污染
+
+**下一阶段工作**（详见 HANDOFF.md）：前端页面审计、service 测试覆盖、GitHub Actions CI。
