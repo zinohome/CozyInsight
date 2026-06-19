@@ -126,6 +126,19 @@ func Setup(db *sqlx.DB, cfg *config.Config, r *gin.Engine, redisClient *cache.Re
 				authd.POST("/messages/read-all", messageHandler.MarkAllAsRead)
 				authd.DELETE("/messages/:id", messageHandler.Delete)
 
+				scheduleRepo := repository.NewScheduleTaskRepository(db)
+				scheduleService := service.NewScheduleService(scheduleRepo)
+				scheduleHandler := handler.NewScheduleHandler(scheduleService)
+
+				authd.GET("/schedule", scheduleHandler.List)
+				authd.POST("/schedule", scheduleHandler.Create)
+				authd.GET("/schedule/:id", scheduleHandler.Get)
+				authd.PUT("/schedule/:id", scheduleHandler.Update)
+				authd.DELETE("/schedule/:id", scheduleHandler.Delete)
+				authd.POST("/schedule/:id/enable", scheduleHandler.Enable)
+				authd.POST("/schedule/:id/disable", scheduleHandler.Disable)
+				authd.POST("/schedule/:id/execute", scheduleHandler.Execute)
+
 			userRepo := repository.NewUserRepository(db)
 			userService := service.NewUserService(userRepo)
 			userHandler := handler.NewUserHandler(userService)
